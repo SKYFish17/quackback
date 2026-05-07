@@ -3,28 +3,29 @@ import { eq } from 'drizzle-orm'
 import { db, settings } from '@/lib/server/db'
 import { invalidateTierLimitsCache } from '@/lib/server/domains/settings/tier-limits.service'
 import { resetAuth } from '@/lib/server/auth/index'
-// Internal endpoints auth directly against the per-tenant
-// INTERNAL_API_KEY env var (CP-projected via OpenBao+ESO).
-// No api_keys-table indirection, no scope check.
-import { authenticateInternal } from '@/lib/server/domains/api-keys/internal-auth'
+// Admin endpoints auth directly against the per-tenant ADMIN_API_TOKEN
+// env var (CP-projected via OpenBao+ESO). Env unset → 404.
+import { authenticateAdminToken } from '@/lib/server/domains/api-keys/admin-token-auth'
 
 /**
- * POST /api/v1/internal/tier-limits
+ * POST /api/v1/admin/tier-limits
  *
  * Trusted endpoint for writing this workspace's tier limits. Used by an
- * external orchestrator or operator script to cap features and counts on
- * a per-workspace basis. Body is the JSON-encoded TierLimits shape (see
- * apps/web/src/lib/server/domains/settings/tier-limits.types.ts). No deep
- * validation — the caller carries the internal:tier-limits scope and is
- * the trusted writer.
+ * external orchestrator (cloud control plane) to cap features and counts
+ * on a per-workspace basis. Body is the JSON-encoded TierLimits shape
+ * (see apps/web/src/lib/server/domains/settings/tier-limits.types.ts).
+ * No deep validation — the caller is authenticated by ADMIN_API_TOKEN
+ * and treated as a trusted writer.
  *
- * Self-hosters can ignore this endpoint; the default (no row) is unlimited.
+ * Self-hosters never set ADMIN_API_TOKEN, so this endpoint returns 404
+ * for them. The default tier limits (no settings row) are unlimited,
+ * which matches single-operator self-host expectations.
  */
-export const Route = createFileRoute('/api/v1/internal/tier-limits')({
+export const Route = createFileRoute('/api/v1/admin/tier-limits')({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const auth = await authenticateInternal(request)
+        const auth = await authenticateAdminToken(request)
         if (auth) return auth
 
         let payload: unknown
