@@ -12,6 +12,7 @@ import {
   getUseCaseLabel,
 } from '@/components/onboarding/default-boards'
 import type { UseCaseType } from '@/lib/shared/db-types'
+import { pickOnboardingStep } from './onboarding-step'
 
 export const Route = createFileRoute('/onboarding/_layout/boards')({
   loader: async ({ context }) => {
@@ -27,8 +28,20 @@ export const Route = createFileRoute('/onboarding/_layout/boards')({
       throw redirect({ to: '/auth/login' })
     }
 
-    if (!state.setupState?.steps?.workspace) {
-      throw redirect({ to: '/onboarding/workspace' })
+    // Delegate when boards step doesn't apply yet (earlier step missing).
+    // pickOnboardingStep returns /onboarding/boards itself when the user
+    // belongs here, so we won't bounce-loop.
+    if (!state.setupState?.useCase || !state.setupState?.steps?.workspace) {
+      throw redirect({
+        to: pickOnboardingStep({
+          session: { userId: session.user.id },
+          state: {
+            needsInvitation: state.needsInvitation,
+            setupState: state.setupState,
+            principalRecord: state.principalRecord,
+          },
+        }),
+      })
     }
 
     const existingBoards = await listBoardsForOnboarding()

@@ -6,6 +6,7 @@ import { checkOnboardingState } from '@/lib/server/functions/admin'
 import { saveUseCaseFn } from '@/lib/server/functions/onboarding'
 import { UseCaseSelector } from '@/components/onboarding/use-case-selector'
 import type { UseCaseType } from '@/lib/shared/db-types'
+import { pickOnboardingStep } from './onboarding-step'
 
 export const Route = createFileRoute('/onboarding/_layout/usecase')({
   loader: async ({ context }) => {
@@ -21,9 +22,20 @@ export const Route = createFileRoute('/onboarding/_layout/usecase')({
       throw redirect({ to: '/auth/login' })
     }
 
-    // If workspace is already set up, go to boards
-    if (state.setupState?.steps?.workspace) {
-      throw redirect({ to: '/onboarding/boards' })
+    // If this step is no longer needed (useCase already chosen),
+    // delegate to pickOnboardingStep so the user lands on the next
+    // incomplete step in wizard order — not a hardcoded sibling.
+    if (state.setupState?.useCase) {
+      throw redirect({
+        to: pickOnboardingStep({
+          session: { userId: session.user.id },
+          state: {
+            needsInvitation: state.needsInvitation,
+            setupState: state.setupState,
+            principalRecord: state.principalRecord,
+          },
+        }),
+      })
     }
 
     return {

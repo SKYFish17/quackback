@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { setupWorkspaceFn } from '@/lib/server/functions/onboarding'
 import { checkOnboardingState } from '@/lib/server/functions/admin'
 import { getSettings } from '@/lib/server/functions/workspace'
+import { pickOnboardingStep } from './onboarding-step'
 
 export const Route = createFileRoute('/onboarding/_layout/workspace')({
   loader: async ({ context }) => {
@@ -21,9 +22,20 @@ export const Route = createFileRoute('/onboarding/_layout/workspace')({
       throw redirect({ to: '/auth/login' })
     }
 
-    // If use case not selected yet, redirect to use case step
-    if (!state.setupState?.useCase) {
-      throw redirect({ to: '/onboarding/usecase' })
+    // Delegate to pickOnboardingStep when this step doesn't apply: useCase
+    // not chosen yet (skip backwards) OR workspace already configured (skip
+    // forwards). One source of truth for wizard order.
+    if (!state.setupState?.useCase || state.setupState?.steps?.workspace) {
+      throw redirect({
+        to: pickOnboardingStep({
+          session: { userId: session.user.id },
+          state: {
+            needsInvitation: state.needsInvitation,
+            setupState: state.setupState,
+            principalRecord: state.principalRecord,
+          },
+        }),
+      })
     }
 
     const settings = await getSettings()
