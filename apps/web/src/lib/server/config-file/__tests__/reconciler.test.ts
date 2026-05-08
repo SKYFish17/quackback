@@ -188,4 +188,26 @@ describe('reconcileFileIntoDb', () => {
     await reconcileFileIntoDb({ tierLimits: { maxBoards: 1 } }, deps)
     expect(deps.resetAuth).not.toHaveBeenCalled()
   })
+
+  it('sanitizes malformed authConfig JSON instead of propagating it', async () => {
+    const deps = baseDeps()
+    deps.readSettings = vi.fn(async () => ({
+      id: 'ws_1',
+      name: 'X',
+      slug: 'x',
+      setupState: null,
+      tierLimits: null,
+      featureFlags: null,
+      // oauth is a string, openSignup is a number — both need to be
+      // discarded rather than written back to the column.
+      authConfig: JSON.stringify({ oauth: 'not-an-object', openSignup: 42 }),
+      managedFieldPaths: [],
+      state: 'active' as const,
+    }))
+    await reconcileFileIntoDb({ auth: { oauth: { google: true } } }, deps)
+    const arg = (deps.updateSettings as ReturnType<typeof vi.fn>).mock.calls[0]![0]
+    const merged = JSON.parse(arg.authConfig as string)
+    expect(merged.oauth).toEqual({ google: true })
+    expect(merged.openSignup).toBe(false)
+  })
 })

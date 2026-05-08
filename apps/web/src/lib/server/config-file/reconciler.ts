@@ -97,16 +97,13 @@ export async function reconcileFileIntoDb(
 
   let touchedAuth = false
   if (spec.auth !== undefined) {
-    const existing = current.authConfig ? (safeJsonParse(current.authConfig) ?? {}) : {}
     // Per-key merge of OAuth providers so the file can lock one
     // provider at a time without nuking others. openSignup falls back
     // to existing → false in that order.
-    const existingOauth =
-      (existing as { oauth?: Record<string, boolean> }).oauth ?? ({} as Record<string, boolean>)
-    const existingOpenSignup = (existing as { openSignup?: boolean }).openSignup
+    const existing = safeAuthExisting(current.authConfig ? safeJsonParse(current.authConfig) : null)
     const merged = {
-      oauth: { ...existingOauth, ...(spec.auth.oauth ?? {}) },
-      openSignup: spec.auth.openSignup ?? existingOpenSignup ?? false,
+      oauth: { ...existing.oauth, ...(spec.auth.oauth ?? {}) },
+      openSignup: spec.auth.openSignup ?? existing.openSignup,
     }
     const serialized = JSON.stringify(merged)
     if (serialized !== current.authConfig) {
@@ -161,6 +158,27 @@ function mergeSetupState(
     useCase: workspace.useCase ?? parsed?.useCase,
     completedAt: parsed?.completedAt,
   }
+}
+
+/**
+ * Coerce parsed authConfig JSON to a known shape. Hardens the merge
+ * against rows that pre-date the schema or were poked at by hand —
+ * a stray `"oauth": "yes"` shouldn't crash the reconciler.
+ */
+function safeAuthExisting(parsed: Record<string, unknown> | null): {
+  oauth: Record<string, boolean>
+  openSignup: boolean
+} {
+  if (!parsed) return { oauth: {}, openSignup: false }
+  const oauthRaw = parsed.oauth
+  const oauth: Record<string, boolean> = {}
+  if (oauthRaw && typeof oauthRaw === 'object' && !Array.isArray(oauthRaw)) {
+    for (const [k, v] of Object.entries(oauthRaw as Record<string, unknown>)) {
+      if (typeof v === 'boolean') oauth[k] = v
+    }
+  }
+  const openSignup = typeof parsed.openSignup === 'boolean' ? parsed.openSignup : false
+  return { oauth, openSignup }
 }
 
 function safeJsonParse(s: string): Record<string, unknown> | null {
