@@ -1,6 +1,7 @@
 import { db, eq, settings } from '@/lib/server/db'
 import { cacheGet, cacheSet, CACHE_KEYS } from '@/lib/server/redis'
 import { ValidationError } from '@/lib/shared/errors'
+import { assertNotManaged } from '@/lib/server/config-file/managed-guard'
 import { getPublicUrlOrNull } from '@/lib/server/storage/s3'
 import type {
   AuthConfig,
@@ -419,6 +420,13 @@ export async function isFeatureEnabled(flag: keyof FeatureFlags): Promise<boolea
  * Update feature flags (partial update, merges with existing)
  */
 export async function updateFeatureFlags(input: Partial<FeatureFlags>): Promise<FeatureFlags> {
+  // Per-key gate: only the keys explicitly in the operator's
+  // config-file are locked, every other flag stays UI-editable. We
+  // assert before any DB write so a partial update with one locked
+  // key fails atomically.
+  for (const key of Object.keys(input)) {
+    await assertNotManaged(`features.${key}`)
+  }
   const org = await requireSettings()
   const current: FeatureFlags = {
     ...DEFAULT_FEATURE_FLAGS,
