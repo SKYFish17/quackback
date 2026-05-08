@@ -24,9 +24,32 @@ export interface SettingsUpdate {
   state?: 'active' | 'suspended' | 'deleting'
 }
 
+/**
+ * Shape used to seed a brand-new settings row from a config file when
+ * none exists yet. workspace.name + slug are the only required fields
+ * (everything else falls back to sensible defaults / null). The
+ * production wiring picks the row id from the schema's TypeID default.
+ */
+export interface SettingsInsert {
+  name: string
+  slug: string
+  setupState?: string
+  tierLimits?: string
+  featureFlags?: string
+  authConfig?: string
+  managedFieldPaths: string[]
+  state: 'active' | 'suspended' | 'deleting'
+}
+
 export interface ReconcileDeps {
   readSettings: () => Promise<SettingsRow | null>
   updateSettings: (update: SettingsUpdate) => Promise<void>
+  /** Insert a fresh settings row when none exists yet. Called by the
+   *  reconciler when the file declares at least workspace.name + slug
+   *  (the minimum required for a valid row). Phase E removed the
+   *  legacy seed-workspace path, so the file is now the sole seed
+   *  channel for cloud-provisioned tenants. */
+  createSettings: (insert: SettingsInsert) => Promise<void>
   invalidateSettingsCache: () => Promise<void>
   invalidateTierLimitsCache: () => Promise<void>
   resetAuth: () => Promise<void>
@@ -57,9 +80,28 @@ export async function reconcileFileIntoDb(
 ): Promise<void> {
   const current = await deps.readSettings()
   if (!current) {
-    // Settings row doesn't exist yet (fresh-install pre-onboarding).
-    // The wizard will INSERT later; the file's state lands on the next
-    // reconcile tick after that.
+    // No settings row exists yet. Phase E dropped seed-workspace.ts,
+    // so the file watcher is the sole seed channel for fresh tenants.
+    // Bootstrap requires at least workspace.name + slug; without those
+    // we can't satisfy the NOT NULL columns, so wait for a richer file.
+    if (!spec.workspace?.name || !spec.workspace?.slug) return
+
+    const setupState = JSON.stringify(mergeSetupState(null, spec.workspace))
+    const authConfig =
+      spec.auth !== undefined ? JSON.stringify(mergeAuthConfig(null, spec.auth)) : undefined
+    await deps.createSettings({
+      name: spec.workspace.name,
+      slug: spec.workspace.slug,
+      setupState,
+      tierLimits: spec.tierLimits !== undefined ? JSON.stringify(spec.tierLimits) : undefined,
+      featureFlags: spec.features !== undefined ? JSON.stringify(spec.features) : undefined,
+      authConfig,
+      managedFieldPaths: computeManagedPaths(spec),
+      state: spec.state ?? 'active',
+    })
+    await deps.invalidateSettingsCache()
+    await deps.invalidateTierLimitsCache()
+    if (spec.auth !== undefined || spec.features !== undefined) await deps.resetAuth()
     return
   }
 
@@ -97,25 +139,7 @@ export async function reconcileFileIntoDb(
 
   let touchedAuth = false
   if (spec.auth !== undefined) {
-    // Per-key merge of OAuth providers so the file can lock one
-    // provider at a time without nuking others. openSignup falls back
-    // to existing → false in that order. ssoOidc is merged per-key on
-    // top of the existing block — the file declares only what it wants
-    // to lock; absent fields keep their stored value.
-    const existing = safeAuthExisting(current.authConfig ? safeJsonParse(current.authConfig) : null)
-    const merged: Record<string, unknown> = {
-      oauth: { ...existing.oauth, ...(spec.auth.oauth ?? {}) },
-      openSignup: spec.auth.openSignup ?? existing.openSignup,
-    }
-    if (existing.ssoOidc) {
-      merged.ssoOidc = existing.ssoOidc
-    }
-    if (spec.auth.ssoOidc !== undefined) {
-      merged.ssoOidc = {
-        ...(existing.ssoOidc ?? {}),
-        ...spec.auth.ssoOidc,
-      }
-    }
+    const merged = mergeAuthConfig(current.authConfig, spec.auth)
     const serialized = JSON.stringify(merged)
     if (serialized !== current.authConfig) {
       update.authConfig = serialized
@@ -173,6 +197,38 @@ function mergeSetupState(
     useCase: workspace.useCase ?? parsed?.useCase,
     completedAt: parsed?.completedAt,
   }
+}
+
+/**
+ * Per-key merge of `auth` over the existing auth config. The file
+ * declares only what it wants to lock; absent fields keep their stored
+ * value. openSignup falls back to existing → false in that order;
+ * ssoOidc is merged per-key on top of the existing block.
+ *
+ * `existing` accepts the raw JSON string (or null) to keep callers
+ * from having to pre-parse — this also runs at insert time, where
+ * there is no row to read from.
+ */
+function mergeAuthConfig(
+  existing: string | null,
+  next: NonNullable<QuackbackConfigSpec['auth']>
+): Record<string, unknown> {
+  const parsed = existing ? safeJsonParse(existing) : null
+  const safe = safeAuthExisting(parsed)
+  const merged: Record<string, unknown> = {
+    oauth: { ...safe.oauth, ...(next.oauth ?? {}) },
+    openSignup: next.openSignup ?? safe.openSignup,
+  }
+  if (safe.ssoOidc) {
+    merged.ssoOidc = safe.ssoOidc
+  }
+  if (next.ssoOidc !== undefined) {
+    merged.ssoOidc = {
+      ...(safe.ssoOidc ?? {}),
+      ...next.ssoOidc,
+    }
+  }
+  return merged
 }
 
 /**

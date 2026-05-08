@@ -2,7 +2,8 @@ import { db, settings, eq } from '@/lib/server/db'
 import { invalidateSettingsCache } from '@/lib/server/domains/settings/settings.helpers'
 import { invalidateTierLimitsCache } from '@/lib/server/domains/settings/tier-limits.service'
 import { resetAuth } from '@/lib/server/auth/index'
-import type { ReconcileDeps, SettingsRow, SettingsUpdate } from './reconciler'
+import { generateId } from '@quackback/ids'
+import type { ReconcileDeps, SettingsInsert, SettingsRow, SettingsUpdate } from './reconciler'
 import { makeReportStatus } from './report-status'
 
 /** Production wiring of `ReconcileDeps`. The reconciler is db-agnostic
@@ -29,6 +30,23 @@ export function makeReconcileDeps(): ReconcileDeps {
       const row = await db.query.settings.findFirst({ columns: { id: true } })
       if (!row) return
       await db.update(settings).set(update).where(eq(settings.id, row.id))
+    },
+    createSettings: async (insert: SettingsInsert) => {
+      // Pass a TypeID string for the id; the typeIdColumn driver
+      // converts it to UUID for storage. createdAt is NOT NULL with no
+      // default at the column level, so we set it here.
+      await db.insert(settings).values({
+        id: generateId('workspace'),
+        name: insert.name,
+        slug: insert.slug,
+        createdAt: new Date(),
+        setupState: insert.setupState,
+        tierLimits: insert.tierLimits,
+        featureFlags: insert.featureFlags,
+        authConfig: insert.authConfig,
+        managedFieldPaths: insert.managedFieldPaths,
+        state: insert.state,
+      })
     },
     invalidateSettingsCache: async () => {
       await invalidateSettingsCache()

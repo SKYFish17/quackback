@@ -17,6 +17,7 @@ const baseDeps = (): ReconcileDeps => ({
     state: 'active' as const,
   })),
   updateSettings: vi.fn(async () => {}),
+  createSettings: vi.fn(async () => {}),
   invalidateSettingsCache: vi.fn(async () => {}),
   invalidateTierLimitsCache: vi.fn(async () => {}),
   resetAuth: vi.fn(async () => {}),
@@ -280,6 +281,74 @@ describe('reconcileFileIntoDb', () => {
     expect(merged.ssoOidc.providerName).toBe('Old Name')
     // oauth block stays intact when only ssoOidc is in the spec
     expect(merged.oauth).toEqual({ google: true })
+  })
+
+  it('creates a settings row when none exists and spec has workspace.name + slug', async () => {
+    const deps = baseDeps()
+    deps.readSettings = vi.fn(async () => null)
+    await reconcileFileIntoDb({ workspace: { name: 'Acme', slug: 'acme' }, state: 'active' }, deps)
+    expect(deps.createSettings).toHaveBeenCalledTimes(1)
+    expect(deps.updateSettings).not.toHaveBeenCalled()
+    const arg = (deps.createSettings as ReturnType<typeof vi.fn>).mock.calls[0]![0]
+    expect(arg).toEqual(
+      expect.objectContaining({
+        name: 'Acme',
+        slug: 'acme',
+        state: 'active',
+        managedFieldPaths: ['workspace.name', 'workspace.slug', 'state'],
+      })
+    )
+    // setupState marks workspace step done because the file declares it
+    const setup = JSON.parse(arg.setupState as string)
+    expect(setup.steps.workspace).toBe(true)
+    // Cache invalidations fire after a successful insert
+    expect(deps.invalidateSettingsCache).toHaveBeenCalledTimes(1)
+    expect(deps.invalidateTierLimitsCache).toHaveBeenCalledTimes(1)
+  })
+
+  it('skips create when spec is missing workspace.name or slug', async () => {
+    const deps = baseDeps()
+    deps.readSettings = vi.fn(async () => null)
+    await reconcileFileIntoDb({ tierLimits: { maxBoards: 5 } }, deps)
+    expect(deps.createSettings).not.toHaveBeenCalled()
+    expect(deps.updateSettings).not.toHaveBeenCalled()
+  })
+
+  it('skips create when only workspace.name is present (slug missing)', async () => {
+    const deps = baseDeps()
+    deps.readSettings = vi.fn(async () => null)
+    await reconcileFileIntoDb({ workspace: { name: 'Acme' } }, deps)
+    expect(deps.createSettings).not.toHaveBeenCalled()
+  })
+
+  it('serializes tierLimits + features + auth on create', async () => {
+    const deps = baseDeps()
+    deps.readSettings = vi.fn(async () => null)
+    await reconcileFileIntoDb(
+      {
+        workspace: { name: 'Acme', slug: 'acme' },
+        tierLimits: { maxBoards: 7 },
+        features: { helpCenter: true },
+        auth: { oauth: { google: true }, openSignup: false },
+      },
+      deps
+    )
+    const arg = (deps.createSettings as ReturnType<typeof vi.fn>).mock.calls[0]![0]
+    expect(JSON.parse(arg.tierLimits as string)).toEqual({ maxBoards: 7 })
+    expect(JSON.parse(arg.featureFlags as string)).toEqual({ helpCenter: true })
+    const auth = JSON.parse(arg.authConfig as string)
+    expect(auth.oauth).toEqual({ google: true })
+    expect(auth.openSignup).toBe(false)
+    // resetAuth fires because both auth + features changed
+    expect(deps.resetAuth).toHaveBeenCalledTimes(1)
+  })
+
+  it('defaults state to active on create when spec.state is omitted', async () => {
+    const deps = baseDeps()
+    deps.readSettings = vi.fn(async () => null)
+    await reconcileFileIntoDb({ workspace: { name: 'Acme', slug: 'acme' } }, deps)
+    const arg = (deps.createSettings as ReturnType<typeof vi.fn>).mock.calls[0]![0]
+    expect(arg.state).toBe('active')
   })
 
   it('sanitizes malformed authConfig JSON instead of propagating it', async () => {
