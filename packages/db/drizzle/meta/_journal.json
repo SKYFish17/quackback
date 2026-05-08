@@ -379,6 +379,13 @@
       "when": 1778457600000,
       "tag": "0053_settings_managed_field_paths",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1778457600001,
+      "tag": "0054_settings_state",
+      "breakpoints": true
     }
   ]
 }

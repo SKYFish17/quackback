@@ -20,6 +20,7 @@ export function makeReconcileDeps(): ReconcileDeps {
         tierLimits: row.tierLimits,
         featureFlags: row.featureFlags,
         managedFieldPaths: (row.managedFieldPaths as string[] | null) ?? [],
+        state: (row.state as 'active' | 'suspended' | 'deleting' | null) ?? 'active',
       } satisfies SettingsRow
     },
     updateSettings: async (update: SettingsUpdate) => {

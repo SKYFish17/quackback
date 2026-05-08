@@ -9,6 +9,7 @@ export interface SettingsRow {
   tierLimits: string | null
   featureFlags: string | null
   managedFieldPaths: string[]
+  state: 'active' | 'suspended' | 'deleting'
 }
 
 export interface SettingsUpdate {
@@ -18,6 +19,7 @@ export interface SettingsUpdate {
   tierLimits?: string
   featureFlags?: string
   managedFieldPaths: string[]
+  state?: 'active' | 'suspended' | 'deleting'
 }
 
 export interface ReconcileDeps {
@@ -80,6 +82,10 @@ export async function reconcileFileIntoDb(
       update.featureFlags = serialized
       touchedFeatures = true
     }
+  }
+
+  if (spec.state !== undefined && spec.state !== current.state) {
+    update.state = spec.state
   }
 
   const pathsChanged = !arrayEquals(newPaths, current.managedFieldPaths)

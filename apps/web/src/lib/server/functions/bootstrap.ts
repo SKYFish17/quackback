@@ -14,6 +14,9 @@ export interface BootstrapData {
    *  in-app form controls render disabled when the path appears here.
    *  Empty list = nothing locked (self-host default). */
   managedFieldPaths: string[]
+  /** Suspension state. 'active' for self-hosters; cloud may flip to
+   *  'suspended' (past-due) or 'deleting' via spec.config.state. */
+  state: 'active' | 'suspended' | 'deleting'
 }
 
 // Returns both the session (with principalType) AND the user role in
@@ -138,6 +141,7 @@ const getBootstrapDataInternal = createServerOnlyFn(async (): Promise<BootstrapD
     userRole,
     themeCookie,
     managedFieldPaths: settings?.managedFieldPaths ?? [],
+    state: settings?.state ?? 'active',
   }
 })
 

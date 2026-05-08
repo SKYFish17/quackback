@@ -228,6 +228,17 @@ export const settings = pgTable('settings', {
    * subtree (e.g. "tierLimits" locks "tierLimits.maxBoards" too).
    */
   managedFieldPaths: jsonb('managed_field_paths').$type<string[]>().notNull().default([]),
+  /**
+   * Suspension state — declarative, written by the config-file
+   * reconciler when CP marks a tenant past-due (`suspended`) or
+   * scheduled-for-delete (`deleting`). Self-hosters never set this:
+   * with no config file there's nothing to reconcile, so the column
+   * keeps its `'active'` default. The middleware in
+   * `lib/server/middleware/suspension-guard.ts` returns 402 / 410 for
+   * non-`active` tenants, and the root route redirects HTML hits to
+   * `/suspended`.
+   */
+  state: text('state').$type<'active' | 'suspended' | 'deleting'>().notNull().default('active'),
 })
 
 /**

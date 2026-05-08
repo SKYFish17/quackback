@@ -425,6 +425,10 @@ export interface TenantSettings {
    *  form controls render disabled when the path appears here. Empty
    *  list = nothing locked (self-host default). */
   managedFieldPaths: string[]
+  /** Suspension state. Defaults to 'active' for self-hosters (no
+   *  config file → never written). Set to 'suspended' or 'deleting'
+   *  by the config-file reconciler when CP flips spec.config.state. */
+  state: 'active' | 'suspended' | 'deleting'
 }
 
 // =============================================================================

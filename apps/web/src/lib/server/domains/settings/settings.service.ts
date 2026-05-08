@@ -383,6 +383,7 @@ export async function getTenantSettings(): Promise<TenantSettings | null> {
       brandingData,
       faviconData: brandingData.faviconUrl ? { url: brandingData.faviconUrl } : null,
       managedFieldPaths: org.managedFieldPaths ?? [],
+      state: (org.state as 'active' | 'suspended' | 'deleting' | null) ?? 'active',
     }
 
     // 1h TTL: settings change rarely and every mutation in this file

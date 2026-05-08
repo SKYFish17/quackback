@@ -66,6 +66,13 @@ const tierLimitsSchema = z
 // validates against; here we just need the shape to be string→boolean.
 const featuresSchema = z.record(z.string(), z.boolean())
 
+// Suspension state. Cloud-only knob: CP flips this when a subscription
+// goes past-due ('suspended') or the Quackback is scheduled for delete
+// ('deleting'). Self-hosters never set it — without a config file the
+// reconciler doesn't run and `settings.state` stays at its DB default
+// of 'active'.
+const stateSchema = z.enum(['active', 'suspended', 'deleting'])
+
 export const quackbackConfigSchema = z
   .object({
     apiVersion: z.literal('quackback.io/v1'),
@@ -76,6 +83,7 @@ export const quackbackConfigSchema = z
         workspace: workspaceSchema.optional(),
         tierLimits: tierLimitsSchema.optional(),
         features: featuresSchema.optional(),
+        state: stateSchema.optional(),
       })
       .strict(),
   })

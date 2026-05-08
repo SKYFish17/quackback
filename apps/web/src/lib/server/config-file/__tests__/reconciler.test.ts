@@ -13,6 +13,7 @@ const baseDeps = (): ReconcileDeps => ({
     tierLimits: null,
     featureFlags: null,
     managedFieldPaths: [],
+    state: 'active' as const,
   })),
   updateSettings: vi.fn(async () => {}),
   invalidateSettingsCache: vi.fn(async () => {}),
@@ -57,6 +58,7 @@ describe('reconcileFileIntoDb', () => {
       tierLimits: null,
       featureFlags: JSON.stringify({ helpCenter: false, other: true }),
       managedFieldPaths: [],
+      state: 'active' as const,
     }))
     await reconcileFileIntoDb({ features: { helpCenter: true } }, deps)
     const arg = (deps.updateSettings as ReturnType<typeof vi.fn>).mock.calls[0]![0]
@@ -74,6 +76,7 @@ describe('reconcileFileIntoDb', () => {
       tierLimits: null,
       featureFlags: null,
       managedFieldPaths: ['tierLimits', 'workspace.name'],
+      state: 'active' as const,
     }))
     await reconcileFileIntoDb({}, deps)
     const arg = (deps.updateSettings as ReturnType<typeof vi.fn>).mock.calls[0]![0]
@@ -112,8 +115,17 @@ describe('reconcileFileIntoDb', () => {
       tierLimits: null,
       featureFlags: null,
       managedFieldPaths: ['workspace.name', 'workspace.slug'],
+      state: 'active' as const,
     }))
     await reconcileFileIntoDb({ workspace: { name: 'Acme', slug: 'acme' } }, deps)
     expect(deps.updateSettings).not.toHaveBeenCalled()
+  })
+
+  it('writes state when spec.state is set', async () => {
+    const deps = baseDeps()
+    await reconcileFileIntoDb({ state: 'suspended' }, deps)
+    const arg = (deps.updateSettings as ReturnType<typeof vi.fn>).mock.calls[0]![0]
+    expect(arg.state).toBe('suspended')
+    expect(arg.managedFieldPaths).toEqual(['state'])
   })
 })

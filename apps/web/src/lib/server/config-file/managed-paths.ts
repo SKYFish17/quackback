@@ -23,6 +23,7 @@ export function computeManagedPaths(spec: QuackbackConfigSpec): string[] {
       paths.push(`features.${key}`)
     }
   }
+  if (spec.state !== undefined) paths.push('state')
   return paths
 }
 
