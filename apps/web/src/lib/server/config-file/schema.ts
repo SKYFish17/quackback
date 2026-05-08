@@ -86,10 +86,34 @@ const oauthProvidersSchema = z
   })
   .strict()
 
+// Cloud-OIDC default admin auth (Phase P). The file declares the
+// non-secret config — discoveryUrl + clientId + UX flags — while the
+// client *secret* keeps riding on SSO_OIDC_CLIENT_SECRET (mounted from
+// the per-tenant K8s Secret rendered by the controller). When enabled
+// + isDefault, the admin login UI promotes "Sign in with {providerName}"
+// as the prominent CTA and demotes password / magic-link / other-OAuth
+// to a "More sign-in options" disclosure.
+const ssoOidcSchema = z
+  .object({
+    enabled: z.boolean(),
+    providerName: z.string().min(1).max(100).default('Quackback Cloud'),
+    discoveryUrl: z.string().url(),
+    clientId: z.string().min(1),
+    /** Show as the prominent default CTA on the admin login page.
+     *  When true + enabled, password sign-in is hidden behind a
+     *  "more options" disclosure (still available; just demoted). */
+    isDefault: z.boolean().default(true),
+    /** Auto-create OSS user records on first SSO sign-in. CP is the
+     *  identity source of truth for cloud, so this is true by default. */
+    autoCreateUsers: z.boolean().default(true),
+  })
+  .strict()
+
 const authSchema = z
   .object({
     oauth: oauthProvidersSchema.optional(),
     openSignup: z.boolean().optional(),
+    ssoOidc: ssoOidcSchema.optional(),
   })
   .strict()
 
