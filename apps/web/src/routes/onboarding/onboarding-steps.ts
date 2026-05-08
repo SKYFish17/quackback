@@ -17,10 +17,10 @@ export const ALL_ONBOARDING_STEPS: readonly OnboardingStepDef[] = [
 
 /**
  * Pick the steps the wizard should *display* given current state.
- * Steps that were pre-stamped at deploy time (e.g. by the env-baked
- * seed-workspace.mjs that runs from docker-entrypoint.sh) are hidden
- * — the user shouldn't see "Step 4 of 4" with three pre-checked
- * boxes for things they didn't do.
+ * Steps that were pre-stamped at deploy time (e.g. by the config-file
+ * watcher reconciling spec.config.workspace) are hidden — the user
+ * shouldn't see "Step 4 of 4" with three pre-checked boxes for things
+ * they didn't do.
  *
  * Account is always shown when the user has no session: it's the
  * only step that creates the principal record. Other steps are
