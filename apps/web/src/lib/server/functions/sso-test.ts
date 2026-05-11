@@ -18,8 +18,8 @@ import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
 import { requireAuth } from './auth-helpers'
 import type { DiagnosticStep, HandshakeStage } from '@/lib/server/auth/sso-test-handshake'
+import { ssoTestResultKey, ssoTestSessionKey } from '@/lib/shared/sso-test-keys'
 
-const CACHE_PREFIX = 'sso-test:'
 const TTL_SECONDS = 600
 
 type TestSession = {
@@ -112,7 +112,7 @@ export const startSsoTestFn = createServerFn({ method: 'POST' })
     }
 
     const { cacheSet } = await import('@/lib/server/redis')
-    await cacheSet(`${CACHE_PREFIX}${state}`, session, TTL_SECONDS)
+    await cacheSet(ssoTestSessionKey(state), session, TTL_SECONDS)
 
     // Mirror production: no PKCE on the authorize request because
     // genericOAuth doesn't send code_verifier on the token request.
@@ -172,7 +172,7 @@ export const getSsoTestResultFn = createServerFn({ method: 'POST' })
   .handler(async ({ data }): Promise<SsoTestDiagnostic | null> => {
     await requireAuth({ roles: ['admin'] })
     const { cacheGet } = await import('@/lib/server/redis')
-    return (await cacheGet<SsoTestDiagnostic>(`${CACHE_PREFIX}result:${data.testId}`)) ?? null
+    return (await cacheGet<SsoTestDiagnostic>(ssoTestResultKey(data.testId))) ?? null
   })
 
 /**
@@ -220,7 +220,7 @@ export const runSsoTestCallbackFn = createServerFn({ method: 'POST' })
       }
     }
 
-    const sessionKey = `${CACHE_PREFIX}${data.state}`
+    const sessionKey = ssoTestSessionKey(data.state)
     const session = await cacheGet<TestSession>(sessionKey)
     if (!session) {
       return {
@@ -265,7 +265,7 @@ export const runSsoTestCallbackFn = createServerFn({ method: 'POST' })
         }
 
     await cacheSet(
-      `${CACHE_PREFIX}result:${session.testId}`,
+      ssoTestResultKey(session.testId),
       { result: wireResult } satisfies SsoTestDiagnostic,
       600
     )

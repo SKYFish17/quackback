@@ -13,6 +13,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useEffect } from 'react'
 import { z } from 'zod'
 import { runSsoTestCallbackFn } from '@/lib/server/functions/sso-test'
+import { SSO_TEST_POSTMESSAGE_SOURCE } from '@/lib/shared/sso-test-keys'
 
 const searchSchema = z.object({
   state: z.string().optional(),
@@ -42,7 +43,7 @@ function TestCallbackPage() {
   useEffect(() => {
     if (typeof window === 'undefined' || !window.opener) return
     window.opener.postMessage(
-      { source: 'quackback-sso-test', testId, result },
+      { source: SSO_TEST_POSTMESSAGE_SOURCE, testId, result },
       window.location.origin
     )
     // Brief delay so admin sees the result before the popup closes

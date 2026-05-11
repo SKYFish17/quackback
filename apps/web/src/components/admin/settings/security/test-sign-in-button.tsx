@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { startSsoTestFn, getSsoTestResultFn } from '@/lib/server/functions/sso-test'
 import type { HandshakeResult } from '@/lib/server/auth/sso-test-handshake'
+import { SSO_TEST_POSTMESSAGE_SOURCE } from '@/lib/shared/sso-test-keys'
 
 const POPUP_FEATURES = 'width=600,height=720'
 const POLL_INTERVAL_MS = 2000
@@ -70,7 +71,7 @@ export function TestSignInButton({ disabled }: { disabled?: boolean }) {
       if (e.origin !== window.location.origin) return
       const data = e.data as { source?: string; result?: WireResult } | null
       if (!data || typeof data !== 'object') return
-      if (data.source !== 'quackback-sso-test') return
+      if (data.source !== SSO_TEST_POSTMESSAGE_SOURCE) return
       if (!data.result) return
       setResult(data.result)
       setTesting(false)
@@ -102,7 +103,7 @@ export function TestSignInButton({ disabled }: { disabled?: boolean }) {
       setTesting(false)
       return
     }
-    const popup = window.open(r.authorizeUrl, 'quackback-sso-test', POPUP_FEATURES)
+    const popup = window.open(r.authorizeUrl, SSO_TEST_POSTMESSAGE_SOURCE, POPUP_FEATURES)
     if (!popup) {
       setError('Popup blocked. Allow popups for this site and try again.')
       setTesting(false)
