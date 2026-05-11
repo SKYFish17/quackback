@@ -2,13 +2,7 @@ import { useEffect, useMemo, useState, useTransition } from 'react'
 import { useRouter } from '@tanstack/react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import {
-  ArrowPathIcon,
-  KeyIcon,
-  ArrowTopRightOnSquareIcon,
-  CheckCircleIcon,
-  ExclamationTriangleIcon,
-} from '@heroicons/react/24/solid'
+import { ArrowPathIcon, KeyIcon, ArrowTopRightOnSquareIcon } from '@heroicons/react/24/solid'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
@@ -39,15 +33,12 @@ import {
 } from '@/components/icons/idp-provider-icons'
 import { getIdpShortcut, inferIdpKind, type IdpKind } from './idp-shortcuts'
 import { updateAuthConfigFn } from '@/lib/server/functions/settings'
-import {
-  testSsoConnectionFn,
-  setSsoClientSecretFn,
-  clearSsoClientSecretFn,
-} from '@/lib/server/functions/sso'
+import { setSsoClientSecretFn, clearSsoClientSecretFn } from '@/lib/server/functions/sso'
 import { isPathManagedFromBootstrap } from '@/lib/client/config-file'
 import { useRouteContext } from '@tanstack/react-router'
 import type { AuthConfig } from '@/lib/shared/types/settings'
-import type { TestSsoConnectionResult, SsoStatus } from '@/lib/server/functions/sso'
+import type { SsoStatus } from '@/lib/server/functions/sso'
+import { TestSignInButton } from './test-sign-in-button'
 
 interface AdminAuthSettingsProps {
   initialConfig: AuthConfig
@@ -422,8 +413,6 @@ function SsoConfiguredForm({
   onSecretChanged: () => void
 }) {
   const [draft, setDraft] = useState(config)
-  const [testing, setTesting] = useState(false)
-  const [testResult, setTestResult] = useState<TestSsoConnectionResult | null>(null)
   const [secretDraft, setSecretDraft] = useState('')
   // Tracks whether the admin has interacted with the secret field. While
   // false AND a saved secret exists, the input shows masked dots as its
@@ -440,21 +429,6 @@ function SsoConfiguredForm({
 
   const fieldManaged = (key: keyof NonNullable<AuthConfig['ssoOidc']>) =>
     isManaged(`auth.ssoOidc.${String(key)}`)
-
-  const handleTest = async () => {
-    setTesting(true)
-    setTestResult(null)
-    try {
-      const result = await testSsoConnectionFn({
-        data: { discoveryUrl: draft.discoveryUrl },
-      })
-      setTestResult(result)
-    } catch (err) {
-      setTestResult({ ok: false, error: err instanceof Error ? err.message : 'fetch_error' })
-    } finally {
-      setTesting(false)
-    }
-  }
 
   const handleSave = async () => {
     setSecretError(null)
@@ -609,14 +583,11 @@ function SsoConfiguredForm({
         />
 
         <div className="flex items-center gap-3">
-          <Button onClick={handleTest} disabled={testing || saving} variant="outline">
-            {testing ? 'Testing…' : 'Test connection'}
-          </Button>
-          <Button onClick={handleSave} disabled={testing || saving}>
+          <Button onClick={handleSave} disabled={saving}>
             {saving ? 'Saving…' : 'Save'}
           </Button>
+          <TestSignInButton disabled={saving || !ssoStatus.secretConfigured} />
         </div>
-        {testResult && <TestResultAlert result={testResult} />}
       </div>
 
       {/* Section 2 — Verified domains (policy layer, depends on connection). */}
@@ -931,31 +902,5 @@ function Field({
       />
       {help && <p className="mt-1 text-xs text-muted-foreground">{help}</p>}
     </div>
-  )
-}
-
-/**
- * Inline test-connection feedback. Full-width Alert variant — the
- * older "next-to-button" badge was easy to miss when the result was
- * a multi-line error code like `missing_field:authorization_endpoint`.
- */
-function TestResultAlert({ result }: { result: TestSsoConnectionResult }) {
-  if (result.ok) {
-    return (
-      <Alert>
-        <CheckCircleIcon className="h-4 w-4 text-green-600" />
-        <AlertDescription>
-          <strong>Reachable.</strong> Issuer: <code className="text-xs">{result.issuer}</code>
-        </AlertDescription>
-      </Alert>
-    )
-  }
-  return (
-    <Alert variant="destructive">
-      <ExclamationTriangleIcon className="h-4 w-4" />
-      <AlertDescription>
-        <strong>Connection failed:</strong> <code className="text-xs">{result.error}</code>
-      </AlertDescription>
-    </Alert>
   )
 }
