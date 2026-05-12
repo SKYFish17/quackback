@@ -27,6 +27,11 @@ const errorMessages: Record<string, string> = {
   // remain available as documented break-glass.
   verified_domain_requires_sso:
     'Your email domain is configured for SSO. Sign in with your single sign-on provider.',
+  // Workspace-wide ssoOidc.required=true — every team member must
+  // use SSO. Distinct from verified_domain_requires_sso (per-domain)
+  // so the message reads as the right level of "scope" for the user.
+  sso_required:
+    'Your workspace requires single sign-on for team members. Sign in with your SSO provider, or use a recovery code if SSO is unavailable.',
   // Better-Auth's genericOAuth plugin surfaces these when the upstream
   // OIDC callback fails — IdP returned an error, token exchange
   // rejected, scope mismatch, etc.

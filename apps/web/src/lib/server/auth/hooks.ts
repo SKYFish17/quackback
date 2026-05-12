@@ -152,39 +152,49 @@ export const hooksBefore = createAuthMiddleware(async (ctx) => {
   const { getTenantSettings } = await import('@/lib/server/domains/settings/settings.service')
   const tenant = await getTenantSettings()
 
-  const { isHardBoundByVerifiedDomain, isAuthMethodAllowed } = await import('./auth-restrictions')
+  const { isHardBound, isAuthMethodAllowed, findVerifiedDomainForEmail } =
+    await import('./auth-restrictions')
 
-  // Hard-binding: when the matching verified-domain row has
-  // `enforced=true`, emails at that domain are rejected for password /
-  // magic-link / email-OTP before any user lookup — inbox control at
-  // the verified domain shouldn't bypass the IdP's role/MFA attestations.
-  // Without per-row enforcement, verification is routing-only and this
-  // predicate returns false.
-  if (isHardBoundByVerifiedDomain(provider, email, tenant?.verifiedDomains)) {
-    throw ctx.redirect('/admin/login?error=verified_domain_requires_sso')
-  }
-
+  // Look up the principal early — `isHardBound` needs the role to
+  // evaluate the workspace-wide `ssoOidc.required` branch. Brand-new
+  // sign-ups (no user row yet) get role='user' so the per-domain
+  // branch still gates them, but the workspace-wide branch skips them
+  // (portal sign-ups at non-verified domains are allowed).
   const { db, user: userTable, principal: principalTable, eq } = await import('@/lib/server/db')
   type UserId = `user_${string}`
   const userRow = await db.query.user.findFirst({
     where: eq(userTable.email, email),
     columns: { id: true },
   })
-  if (!userRow) return
+  const principalRow = userRow
+    ? await db.query.principal.findFirst({
+        where: eq(principalTable.userId, userRow.id as UserId),
+        columns: { role: true },
+      })
+    : null
+  const role = (principalRow?.role ?? 'user') as 'admin' | 'member' | 'user'
 
-  const principalRow = await db.query.principal.findFirst({
-    where: eq(principalTable.userId, userRow.id as UserId),
-    columns: { role: true },
-  })
+  // Hard-binding: refuses password / magic-link / email-OTP for
+  //   a) emails at a verified-domain row marked enforced (per-domain), OR
+  //   b) any admin/member when `ssoOidc.required=true` (workspace-wide)
+  // The verified-domain branch fires before user lookup matters —
+  // inbox control at the verified domain shouldn't bypass the IdP's
+  // attestations even for brand-new sign-ups.
+  if (isHardBound(provider, email, role, tenant?.authConfig, tenant?.verifiedDomains)) {
+    // Use the workspace-wide message for team-role hard-binds when no
+    // per-domain row matches; the per-domain message is more specific
+    // for the domain-enforce case.
+    const verifiedMatch = findVerifiedDomainForEmail(email, tenant?.verifiedDomains)
+    const errorCode =
+      verifiedMatch?.enforced === true ? 'verified_domain_requires_sso' : 'sso_required'
+    throw ctx.redirect(`/admin/login?error=${errorCode}`)
+  }
+
   if (!principalRow) return
 
-  const result = await isAuthMethodAllowed(
-    provider,
-    principalRow.role as 'admin' | 'member' | 'user',
-    tenant
-  )
+  const result = await isAuthMethodAllowed(provider, role, tenant)
   if (!result.allowed) {
-    const isTeamRole = principalRow.role === 'admin' || principalRow.role === 'member'
+    const isTeamRole = role === 'admin' || role === 'member'
     const target = isTeamRole ? '/admin/login' : '/auth/login'
     throw ctx.redirect(`${target}?error=${result.error ?? 'auth_method_blocked'}`)
   }
@@ -460,7 +470,8 @@ async function handleCallbackPolicyCleanup(
   } = await import('@/lib/server/db')
   type UserId = `user_${string}`
 
-  const { findVerifiedDomainForEmail, isAuthMethodAllowed } = await import('./auth-restrictions')
+  const { isHardBound, findVerifiedDomainForEmail, isAuthMethodAllowed } =
+    await import('./auth-restrictions')
   const verifiedDomains = tenant?.verifiedDomains
 
   // Look up the principal once — both the role-aware redirect (for the
@@ -474,33 +485,38 @@ async function handleCallbackPolicyCleanup(
   const blockedRedirect = (errorCode: string) =>
     ctx.redirect(`${isTeamRole ? '/admin/login' : '/auth/login'}?error=${errorCode}`)
 
-  // Hard-binding: a non-SSO callback gets revoked when the IdP-asserted
-  // email matches a verified-domain row whose `enforced` flag is on.
-  // Without per-row enforcement, verification is routing-only and other
-  // methods stay open. Trust the email here, not the just-created
-  // principal's role — a brand-new verified-domain sign-up would
-  // otherwise slip through.
-  if (provider !== 'sso' && typeof userEmail === 'string') {
-    const enforcedRow = findVerifiedDomainForEmail(userEmail, verifiedDomains)
-    if (enforcedRow?.enforced === true) {
-      await revokeSession(ctx as SessionCtx, token)
+  // Hard-binding for non-SSO callbacks: handles both branches via
+  // isHardBound — per-domain (verified-domain row with enforced=true)
+  // and workspace-wide (authConfig.ssoOidc.required=true for any
+  // admin/member, regardless of email domain). Either match revokes
+  // the just-created session and wipes the user/account/principal
+  // shells for brand-new sign-ups so blocked first-time sign-ups
+  // don't leave dangling rows.
+  if (
+    provider !== 'sso' &&
+    typeof userEmail === 'string' &&
+    isHardBound(provider, userEmail, role, tenant?.authConfig, verifiedDomains)
+  ) {
+    await revokeSession(ctx as SessionCtx, token)
 
-      // Wipe user/account/principal for brand-new users so blocked
-      // first-time sign-ups don't leave shells behind. Existing users
-      // (pre-dating verification) keep their rows.
-      const userRow = await db.query.user.findFirst({
-        where: eq(userTable.id, userId as UserId),
-        columns: { createdAt: true },
-      })
-      const justCreated = userRow?.createdAt && Date.now() - userRow.createdAt.getTime() < 60_000
-      if (justCreated) {
-        await db.delete(accountTable).where(eq(accountTable.userId, userId as UserId))
-        await db.delete(principalTable).where(eq(principalTable.userId, userId as UserId))
-        await db.delete(userTable).where(eq(userTable.id, userId as UserId))
-      }
-
-      throw blockedRedirect('verified_domain_requires_sso')
+    // Wipe brand-new shells; existing users keep their rows.
+    const userRow = await db.query.user.findFirst({
+      where: eq(userTable.id, userId as UserId),
+      columns: { createdAt: true },
+    })
+    const justCreated = userRow?.createdAt && Date.now() - userRow.createdAt.getTime() < 60_000
+    if (justCreated) {
+      await db.delete(accountTable).where(eq(accountTable.userId, userId as UserId))
+      await db.delete(principalTable).where(eq(principalTable.userId, userId as UserId))
+      await db.delete(userTable).where(eq(userTable.id, userId as UserId))
     }
+
+    // Per-domain hits use the existing `verified_domain_requires_sso`
+    // copy; workspace-wide hits get the new `sso_required` code.
+    const verifiedMatch = findVerifiedDomainForEmail(userEmail, verifiedDomains)
+    const errorCode =
+      verifiedMatch?.enforced === true ? 'verified_domain_requires_sso' : 'sso_required'
+    throw blockedRedirect(errorCode)
   }
 
   if (!principalRow) return
