@@ -65,6 +65,19 @@ function friendlyStartError(error: string): string {
   }
 }
 
+/** Pick the modal's DialogDescription copy for the current phase. */
+function describeModalState(testing: boolean, result: WireResult | null): string {
+  if (testing) {
+    return "Sign in to your IdP in the popup. We'll show what happened here when you're done."
+  }
+  if (result) {
+    return result.ok
+      ? 'Looks good — everything went through.'
+      : "Something didn't connect. The steps below show where."
+  }
+  return "Sign in to your IdP in a popup. We'll walk you through what happened."
+}
+
 export function TestSignInButton({ disabled }: { disabled?: boolean }) {
   const startTest = useServerFn(startSsoTestFn)
   const pollResult = useServerFn(getSsoTestResultFn)
@@ -208,15 +221,7 @@ export function TestSignInButton({ disabled }: { disabled?: boolean }) {
         <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col gap-0 p-0 sm:max-w-lg">
           <DialogHeader className="shrink-0 px-6 pt-6 pb-2">
             <DialogTitle>Test sign-in</DialogTitle>
-            <DialogDescription>
-              {testing
-                ? "Sign in to your IdP in the popup. We'll show what happened here when you're done."
-                : result
-                  ? result.ok
-                    ? 'Looks good — everything went through.'
-                    : "Something didn't connect. The steps below show where."
-                  : "Sign in to your IdP in a popup. We'll walk you through what happened."}
-            </DialogDescription>
+            <DialogDescription>{describeModalState(testing, result)}</DialogDescription>
           </DialogHeader>
           <div className="flex-1 overflow-y-auto px-6 pb-2">
             {error ? (
