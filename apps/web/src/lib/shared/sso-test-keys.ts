@@ -26,3 +26,11 @@ export function ssoTestResultKey(testId: string): string {
  * origin (browser extensions, devtools, other tabs).
  */
 export const SSO_TEST_POSTMESSAGE_SOURCE = 'quackback-sso-test' as const
+
+/**
+ * Better-Auth genericOAuth callback path for the production SSO
+ * provider. The test flow piggy-backs on this exact URL so admins
+ * only register one redirect URI with their IdP; the auth catch-all
+ * dispatches test vs prod by inspecting the OAuth `state`.
+ */
+export const SSO_OAUTH_CALLBACK_PATH = '/api/auth/oauth2/callback/sso' as const

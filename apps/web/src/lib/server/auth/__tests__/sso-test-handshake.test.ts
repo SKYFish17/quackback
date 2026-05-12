@@ -14,7 +14,7 @@ const baseInput: HandshakeInput = {
   discoveryUrl: 'https://idp.example/.well-known/openid-configuration',
   clientId: 'cid',
   clientSecret: 'csecret',
-  redirectUri: 'https://qb/admin/sso/test/callback',
+  redirectUri: 'https://qb/api/auth/oauth2/callback/sso',
   expectedNonce: 'nonce789',
   expectedState: 'state123',
 }

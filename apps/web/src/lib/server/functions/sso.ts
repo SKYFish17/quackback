@@ -27,6 +27,7 @@ import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
 import { ConflictError, ForbiddenError } from '@/lib/shared/errors'
 import { httpsUrl } from '@/lib/shared/schemas/auth'
+import { SSO_OAUTH_CALLBACK_PATH } from '@/lib/shared/sso-test-keys'
 import { requireAuth } from './auth-helpers'
 
 const testSsoConnectionInput = z.object({
@@ -341,7 +342,7 @@ export const getSsoStatusFn = createServerFn({ method: 'GET' }).handler(
     }
 
     const { config } = await import('@/lib/server/config')
-    const redirectUri = `${config.baseUrl.replace(/\/$/, '')}/api/auth/oauth2/callback/sso`
+    const redirectUri = `${config.baseUrl.replace(/\/$/, '')}${SSO_OAUTH_CALLBACK_PATH}`
 
     return {
       lastSignInAt: lastSignInAt ? lastSignInAt.toISOString() : null,

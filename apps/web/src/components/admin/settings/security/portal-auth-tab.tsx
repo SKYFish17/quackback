@@ -141,7 +141,7 @@ export function PortalAuthTab({
             label="Email magic link"
             description={
               emailConfigured
-                ? 'One-click link or 6-digit code by email. No password needed.'
+                ? 'One-click link or 6-digit code by email.'
                 : 'Configure SMTP or Resend to enable email delivery.'
             }
             checked={magicLinkEnabled}
