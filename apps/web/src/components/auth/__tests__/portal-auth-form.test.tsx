@@ -154,7 +154,13 @@ describe('PortalAuthForm — Stage 1 → Stage 2 dispatch', () => {
     fireEvent.click(screen.getByRole('button', { name: /continue/i }))
 
     await waitFor(() =>
-      expect(signInOauth2Mock).toHaveBeenCalledWith({ providerId: 'sso', callbackURL: '/' })
+      expect(signInOauth2Mock).toHaveBeenCalledWith({
+        providerId: 'sso',
+        callbackURL: '/',
+        // Typed email is forwarded as `loginHint` so the IdP can pre-
+        // select that account in its picker.
+        additionalData: { loginHint: 'jane@acme.com' },
+      })
     )
     // Transient spinner shown while bouncing
     await screen.findByText(/signing you in/i)

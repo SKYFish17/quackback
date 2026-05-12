@@ -180,8 +180,14 @@ export function PortalAuthForm({
         // Same-tab redirect to IdP — show a transient spinner while the
         // browser bounces. `authClient.signIn.oauth2` navigates away so
         // we never re-render past this point in the happy path.
+        // Pass the typed email as `loginHint` so the IdP pre-selects
+        // that account in its picker.
         setView({ stage: 'sso-redirecting' })
-        await authClient.signIn.oauth2({ providerId: 'sso', callbackURL: callbackUrl })
+        await authClient.signIn.oauth2({
+          providerId: 'sso',
+          callbackURL: callbackUrl,
+          additionalData: { loginHint: trimmed },
+        })
         return
       }
       if (result.kind === 'sso-default') {
@@ -481,7 +487,12 @@ export function PortalAuthForm({
             setLoading(true)
             try {
               setView({ stage: 'sso-redirecting' })
-              await authClient.signIn.oauth2({ providerId: 'sso', callbackURL: callbackUrl })
+              const trimmed = email.trim()
+              await authClient.signIn.oauth2({
+                providerId: 'sso',
+                callbackURL: callbackUrl,
+                additionalData: trimmed ? { loginHint: trimmed } : undefined,
+              })
             } catch (err) {
               setError((err as Error).message || 'Could not start SSO sign-in.')
               setView({ stage: 'sso-default' })

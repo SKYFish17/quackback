@@ -59,10 +59,18 @@ export function TeamLoginForm({ callbackUrl, authConfig }: TeamLoginFormProps) {
 
   async function redirectToSso() {
     // Same-tab redirect to IdP; Better-Auth completes the dance and
-    // returns to `callbackUrl` after the post-auth bounce.
+    // returns to `callbackUrl` after the post-auth bounce. We pass
+    // the typed email as `loginHint` so the IdP can pre-select that
+    // account in its picker — without this, admins typing one email
+    // can get silently signed in as whichever account the IdP
+    // already has a session for.
     setLoading(true)
     try {
-      await authClient.signIn.oauth2({ providerId: 'sso', callbackURL: callbackUrl })
+      await authClient.signIn.oauth2({
+        providerId: 'sso',
+        callbackURL: callbackUrl,
+        additionalData: email.trim() ? { loginHint: email.trim() } : undefined,
+      })
     } catch (err) {
       setError((err as Error).message || 'Could not start SSO sign-in.')
       setLoading(false)
@@ -80,6 +88,10 @@ export function TeamLoginForm({ callbackUrl, authConfig }: TeamLoginFormProps) {
         await authClient.signIn.oauth2({
           providerId: 'sso',
           callbackURL: callbackUrl,
+          // Pass the typed email so the IdP pre-selects that
+          // account; combined with `prompt=select_account` server-
+          // side, the IdP shows the picker on every sign-in.
+          additionalData: { loginHint: email.trim() },
         })
         return
       }

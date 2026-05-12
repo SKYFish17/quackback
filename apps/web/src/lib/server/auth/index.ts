@@ -99,6 +99,23 @@ async function createAuth() {
     authorizationUrl?: string
     tokenUrl?: string
     scopes?: string[]
+    // SSO-only: force the IdP account picker so admins notice when
+    // they're already signed in as a different identity.
+    prompt?:
+      | 'none'
+      | 'login'
+      | 'create'
+      | 'consent'
+      | 'select_account'
+      | 'select_account consent'
+      | 'login consent'
+    // SSO-only: emit `login_hint` to pre-select the typed email in
+    // the IdP picker. The ctx shape comes from Better-Auth's endpoint
+    // builder; we only read `body.additionalData.loginHint` so we
+    // accept a loose ctx type and narrow inside the function.
+    authorizationUrlParams?: (ctx: {
+      body?: { additionalData?: { loginHint?: string } }
+    }) => Record<string, string>
   }> = []
 
   // Defense-in-depth: a workspace that configured SSO on a higher tier
@@ -155,6 +172,27 @@ async function createAuth() {
         clientSecret,
         discoveryUrl: cfg.discoveryUrl,
         scopes: ['openid', 'email', 'profile'],
+        // Force the IdP to show the account-picker. Without this, an
+        // admin typing demo@example.com at the login form gets
+        // silently signed in as whoever the IdP already has a
+        // session for (e.g. james.morton@quackback.io) — the IdP
+        // re-uses its existing session because it has no reason to
+        // re-prompt. With select_account, the IdP always asks the
+        // user which account they want to sign in with so the
+        // identity is explicit.
+        prompt: 'select_account',
+        // login_hint pre-selects the typed email in the IdP picker.
+        // Read from the `additionalData.loginHint` body field that
+        // the team-login / portal-auth forms pass when initiating
+        // SSO. When the field is absent (e.g. a direct hit on
+        // /sign-in/oauth2 with no email context) we omit the hint
+        // and the IdP just shows its default account list.
+        authorizationUrlParams: (ctx) => {
+          const hint = ctx.body?.additionalData?.loginHint
+          const params: Record<string, string> = {}
+          if (hint) params.login_hint = hint
+          return params
+        },
         // Better-Auth's built-in JIT block. When false, the upstream
         // callback aborts in handleOAuthUserInfo BEFORE any user/
         // session is created, then redirects with `?error=signup_disabled`.
