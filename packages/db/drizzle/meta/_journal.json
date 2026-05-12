@@ -407,6 +407,13 @@
       "when": 1778457600004,
       "tag": "0057_audit_log",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1778457600005,
+      "tag": "0058_sso_recovery_codes",
+      "breakpoints": true
     }
   ]
 }

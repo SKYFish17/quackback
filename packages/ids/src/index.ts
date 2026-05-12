@@ -114,6 +114,7 @@ export type {
   DomainId,
   TransferTokenId,
   AuditLogId,
+  SsoRecoveryCodeId,
   ApiKeyId,
   WebhookId,
   // Billing
