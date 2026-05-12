@@ -603,11 +603,23 @@ export async function handleCredentialPostSignInGate(
 }
 
 /**
- * Composed `hooks.after` middleware. Order matters: bootstrap admin
- * promotion + lastSsoSignInAt run before policy cleanup, so a
- * legitimate first-SSO sign-in still claims admin even if a stale
- * `enforced=true` would otherwise revoke it (the policy allows SSO
- * under enforcement, so the cleanup is a no-op for that path).
+ * Composed `hooks.after` middleware. Order matters:
+ *
+ *  1. `handleSsoCallbackAfter` — bootstrap admin promotion +
+ *     lastSsoSignInAt stamp. Only fires on SSO callbacks.
+ *  2. `handleAutoProvisionAfter` — promote brand-new verified-domain
+ *     sign-ins from `role='user'` (default) up to `member`/`admin`
+ *     per the workspace's autoProvisionRole / attributeMapping
+ *     config. MUST run before the policy cleanup, otherwise the
+ *     cleanup sees role='user' and runs `checkPortalAuthMethod('sso')`,
+ *     which blocks the sign-in because `portalConfig.oauth.sso`
+ *     isn't set (SSO is configured on the team side, not the portal).
+ *  3. `handleCallbackPolicyCleanup` — revoke sessions that violate
+ *     per-domain enforcement or workspace policy. Now sees the
+ *     post-provision role, so SSO callbacks for verified-domain
+ *     users are correctly classified as team and allowed through.
+ *  4. `handleCredentialPostSignInGate` — Require-2FA gate for the
+ *     password path.
  */
 export const hooksAfter = createAuthMiddleware(async (ctx) => {
   if (process.env.AUTH_HOOKS_DEBUG === '1') {
@@ -616,11 +628,12 @@ export const hooksAfter = createAuthMiddleware(async (ctx) => {
   }
   await handleSsoCallbackAfter(ctx as Parameters<typeof handleSsoCallbackAfter>[0])
 
-  // One settings fetch shared across the two policy helpers below so
-  // we don't make 2-3 sequential cache round-trips per sign-in.
+  // One settings fetch shared across all helpers below so we don't
+  // make 2-3 sequential cache round-trips per sign-in.
   const { getTenantSettings } = await import('@/lib/server/domains/settings/settings.service')
   const tenant = await getTenantSettings()
 
+  await handleAutoProvisionAfter(ctx as Parameters<typeof handleAutoProvisionAfter>[0], tenant)
   await handleCallbackPolicyCleanup(
     ctx as Parameters<typeof handleCallbackPolicyCleanup>[0],
     tenant
@@ -631,8 +644,4 @@ export const hooksAfter = createAuthMiddleware(async (ctx) => {
     ctx as Parameters<typeof handleCredentialPostSignInGate>[0],
     tenant
   )
-  // Auto-provision runs last so it observes post-bootstrap and post-
-  // cleanup principal state. The role==='user' guard prevents it from
-  // touching admins promoted by handleSsoCallbackAfter.
-  await handleAutoProvisionAfter(ctx as Parameters<typeof handleAutoProvisionAfter>[0], tenant)
 })
