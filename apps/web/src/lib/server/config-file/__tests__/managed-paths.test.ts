@@ -61,7 +61,6 @@ describe('computeManagedPaths', () => {
             discoveryUrl: 'https://idp.example.com/.well-known/openid-configuration',
             clientId: 'workspace-x',
             autoCreateUsers: true,
-            enforced: false,
           },
         },
       })
@@ -70,7 +69,6 @@ describe('computeManagedPaths', () => {
       'auth.ssoOidc.discoveryUrl',
       'auth.ssoOidc.clientId',
       'auth.ssoOidc.autoCreateUsers',
-      'auth.ssoOidc.enforced',
     ])
   })
 })

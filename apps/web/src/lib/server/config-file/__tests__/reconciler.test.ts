@@ -208,7 +208,6 @@ describe('reconcileFileIntoDb', () => {
             discoveryUrl: 'https://idp.example.com/.well-known/openid-configuration',
             clientId: 'workspace-x',
             autoCreateUsers: true,
-            enforced: false,
           },
         },
       },
@@ -223,7 +222,6 @@ describe('reconcileFileIntoDb', () => {
       'auth.ssoOidc.discoveryUrl',
       'auth.ssoOidc.clientId',
       'auth.ssoOidc.autoCreateUsers',
-      'auth.ssoOidc.enforced',
     ])
     expect(deps.resetAuth).toHaveBeenCalled()
   })
@@ -262,7 +260,6 @@ describe('reconcileFileIntoDb', () => {
             discoveryUrl: 'https://old.example.com/.well-known/openid-configuration',
             clientId: 'new-id',
             autoCreateUsers: false,
-            enforced: false,
           },
         },
       },

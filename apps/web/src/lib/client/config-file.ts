@@ -20,7 +20,6 @@ export const MANAGED_PATHS = {
   AUTH_SSO_DISCOVERY_URL: 'auth.ssoOidc.discoveryUrl',
   AUTH_SSO_CLIENT_ID: 'auth.ssoOidc.clientId',
   AUTH_SSO_AUTO_CREATE_USERS: 'auth.ssoOidc.autoCreateUsers',
-  AUTH_SSO_ENFORCED: 'auth.ssoOidc.enforced',
 } as const
 
 export type ManagedPath = (typeof MANAGED_PATHS)[keyof typeof MANAGED_PATHS] | (string & {})

@@ -210,8 +210,8 @@ export const hooksBefore = createAuthMiddleware(async (ctx) => {
  *    check. Recovery-scoped — a healthy workspace post-onboarding
  *    always has an admin so this is a no-op.
  *
- * 2. **`lastSsoSignInAt` write.** Read by the
- *    `setSsoEnforcedFn` bootstrap guard to refuse enabling enforcement
+ * 2. **`lastSsoSignInAt` write.** Read by `setVerifiedDomainEnforcedFn`'s
+ *    bootstrap guard to refuse turning per-domain enforcement on
  *    without a recent SSO sign-in. Written here on every successful
  *    SSO callback (newSession exists). Link callbacks have no
  *    newSession and are correctly skipped — explicit account-link

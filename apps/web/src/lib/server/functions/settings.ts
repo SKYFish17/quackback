@@ -311,10 +311,10 @@ export const updateAuthConfigSchema = z.object({
       clientId: z.string().min(1).optional(),
       autoCreateUsers: z.boolean().optional(),
       autoProvisionRole: z.enum(['admin', 'member', 'user']).optional(),
-      // ssoOidc.enforced is intentionally NOT accepted here — it goes
-      // through setSsoEnforcedFn so the bootstrap-guard + break-glass
-      // preconditions run. ssoOidc.domain is server-owned via
-      // setSsoDomainFn / verifyDomainFn, never accepted here.
+      // Per-domain SSO enforcement is server-owned via
+      // setVerifiedDomainEnforcedFn (writes sso_verified_domain.enforced).
+      // The legacy workspace-wide `ssoOidc.enforced` and `ssoOidc.domain`
+      // keys are no longer part of the auth-config shape.
     })
     .strict()
     .optional(),

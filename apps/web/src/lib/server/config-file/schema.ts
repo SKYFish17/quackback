@@ -95,13 +95,11 @@ const ssoOidcSchema = z
     clientId: z.string().min(1),
     /** Auto-create user records on first SSO sign-in. */
     autoCreateUsers: z.boolean().default(true),
-    /** Require SSO for team sign-in. Layer B blocks password and
-     *  Layer C revokes other-OAuth team sessions when true. Magic-link
-     *  remains as break-glass. Refinement on the parent authSchema
-     *  rejects enforced=true without enabled+discoveryUrl+clientId. */
-    enforced: z.boolean().default(false),
   })
   .strict()
+
+// SSO enforcement is per-domain (sso_verified_domain.enforced), not
+// declared here. A config-file shape for that can be added later.
 
 const authSchema = z
   .object({
@@ -110,12 +108,6 @@ const authSchema = z
     ssoOidc: ssoOidcSchema.optional(),
   })
   .strict()
-  .refine(
-    (a) =>
-      !a.ssoOidc?.enforced ||
-      Boolean(a.ssoOidc.enabled && a.ssoOidc.discoveryUrl && a.ssoOidc.clientId),
-    { message: 'ssoOidc.enforced requires enabled + discoveryUrl + clientId' }
-  )
 
 export const quackbackConfigSchema = z
   .object({
