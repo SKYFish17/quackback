@@ -180,7 +180,7 @@ function SetupDialog({ onClose, onComplete }: { onClose: () => void; onComplete:
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
             {step === 'password' && 'Confirm your password'}
@@ -290,7 +290,7 @@ function DisableDialog({ onClose, onComplete }: { onClose: () => void; onComplet
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Disable two-factor authentication?</DialogTitle>
         </DialogHeader>
