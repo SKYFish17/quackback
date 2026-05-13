@@ -167,17 +167,28 @@ export function AdminAuthSettings({
             saving ||
             isPending ||
             isManaged('auth.oauth.password') ||
-            (passwordEnabled && enabledMethodCount === 1)
+            (passwordEnabled && enabledMethodCount === 1) ||
+            // Coupling invariant: 2FA enrollment requires password
+            // confirmation, and the 2FA gate runs on password / magic-
+            // link verify paths. Turning password off while 2FA is
+            // required would lock the workspace — disable Require 2FA
+            // first. Mirrored by the server-side validator and the 2FA
+            // toggle below.
+            (passwordEnabled && twoFactorRequired)
           }
           badge={isManaged('auth.oauth.password') ? 'Managed' : undefined}
         />
         <MethodRow
           icon={ShieldCheckIcon}
           label="Require 2FA for team members"
-          description="Block password sign-in for admins and members until they enroll an authenticator. Magic-link stays open as the recovery path."
+          description={
+            passwordEnabled
+              ? 'Admins and members must complete a TOTP challenge on every password sign-in, and magic-link sign-in is refused for users who have enrolled. Recovery codes remain available as the break-glass.'
+              : 'Enable Password sign-in first — enrolling a TOTP authenticator requires confirming a password.'
+          }
           checked={twoFactorRequired}
           onCheckedChange={toggleTwoFactorRequired}
-          disabled={saving || isPending || isManaged('auth.twoFactor.required')}
+          disabled={saving || isPending || isManaged('auth.twoFactor.required') || !passwordEnabled}
           badge={isManaged('auth.twoFactor.required') ? 'Managed' : undefined}
         />
       </SettingsCard>

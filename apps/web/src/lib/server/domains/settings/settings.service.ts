@@ -203,6 +203,27 @@ export async function updateAuthConfig(input: UpdateAuthConfigInput): Promise<Au
     const existing = parseJsonConfig(org.authConfig, DEFAULT_AUTH_CONFIG)
     const updated = deepMerge(existing, input as Partial<AuthConfig>)
 
+    // Coupling invariant: `twoFactor.required=true` is only meaningful
+    // when `oauth.password=true`. The 2FA gate
+    // (`handleCredentialPostSignInGate`) runs exclusively on password
+    // sign-in paths — magic-link, SSO, and non-SSO OAuth all bypass
+    // it. Persisting `required=true` while password is off stores a
+    // toggle that does nothing at runtime, which misleads admins
+    // reading the settings page ("my team is 2FA-protected") and
+    // pollutes audit dumps. Reject the combination at write time;
+    // migration 0061 normalized any pre-existing inert state.
+    //
+    // `password` defaults to `true` when the key is absent (matches
+    // `DEFAULT_AUTH_CONFIG` + `isAuthMethodAllowed`'s `?? true`), so
+    // we only refuse when it's *explicitly* false.
+    if (updated.twoFactor?.required === true && updated.oauth?.password === false) {
+      const { ValidationError } = await import('@/lib/shared/errors')
+      throw new ValidationError(
+        'TWO_FACTOR_REQUIRES_PASSWORD',
+        'Two-factor enforcement only applies to password sign-in. Enable Password sign-in first, or disable Require 2FA before turning off Password.'
+      )
+    }
+
     // Partial-write validation: a naked `{ ssoOidc: { enabled: true } }`
     // shouldn't land in DB if the stored ssoOidc is missing discoveryUrl
     // / clientId — the runtime would skip registration and the workspace

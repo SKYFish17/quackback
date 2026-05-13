@@ -18,7 +18,7 @@
  */
 
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { shouldRequire2FA } from '../two-factor-policy'
+import { shouldRequire2FA, evaluateMagicLinkTwoFactor } from '../two-factor-policy'
 
 describe('shouldRequire2FA', () => {
   it('returns false when the workspace toggle is off', () => {
@@ -224,5 +224,196 @@ describe('handleCredentialPostSignInGate', () => {
 
     await expect(callGate(ctx, true)).rejects.toThrow('REDIRECT:/auth/two-factor-setup-required')
     expect(mockDelete).toHaveBeenCalledTimes(1)
+  })
+})
+
+// --- evaluateMagicLinkTwoFactor (pure predicate, 3-state) ---
+
+describe('evaluateMagicLinkTwoFactor', () => {
+  it('returns allow when workspace toggle is off (any role / enrollment)', () => {
+    for (const role of ['admin', 'member', 'user'] as const) {
+      for (const userHas2FA of [true, false]) {
+        expect(evaluateMagicLinkTwoFactor({ role, userHas2FA, workspaceRequired: false })).toBe(
+          'allow'
+        )
+      }
+    }
+  })
+
+  it('returns allow for portal users regardless of enrollment under required=true', () => {
+    expect(
+      evaluateMagicLinkTwoFactor({
+        role: 'user',
+        userHas2FA: false,
+        workspaceRequired: true,
+      })
+    ).toBe('allow')
+    expect(
+      evaluateMagicLinkTwoFactor({
+        role: 'user',
+        userHas2FA: true,
+        workspaceRequired: true,
+      })
+    ).toBe('allow')
+  })
+
+  it('returns setup-required for team user without 2FA when workspace required', () => {
+    expect(
+      evaluateMagicLinkTwoFactor({
+        role: 'admin',
+        userHas2FA: false,
+        workspaceRequired: true,
+      })
+    ).toBe('setup-required')
+    expect(
+      evaluateMagicLinkTwoFactor({
+        role: 'member',
+        userHas2FA: false,
+        workspaceRequired: true,
+      })
+    ).toBe('setup-required')
+  })
+
+  it('returns use-password for team user WITH 2FA enrolled when workspace required', () => {
+    // Magic-link bypasses Better-Auth's TOTP challenge — we refuse and
+    // steer them to the password+TOTP path.
+    expect(
+      evaluateMagicLinkTwoFactor({
+        role: 'admin',
+        userHas2FA: true,
+        workspaceRequired: true,
+      })
+    ).toBe('use-password')
+    expect(
+      evaluateMagicLinkTwoFactor({
+        role: 'member',
+        userHas2FA: true,
+        workspaceRequired: true,
+      })
+    ).toBe('use-password')
+  })
+})
+
+// --- handleMagicLinkPostSignInGate (post-session magic-link gate) ---
+
+const MAGIC_LINK_PATHS = ['/magic-link/verify', '/sign-in/email-otp']
+
+const callMagicLinkGate = async (ctx: GateCtx, required: boolean) => {
+  const mod = (await import('../hooks')) as typeof import('../hooks') & {
+    handleMagicLinkPostSignInGate?: (
+      ctx: GateCtx,
+      tenant: Awaited<
+        ReturnType<
+          typeof import('@/lib/server/domains/settings/settings.service').getTenantSettings
+        >
+      >
+    ) => Promise<void>
+  }
+  const handler = mod.handleMagicLinkPostSignInGate
+  if (!handler) throw new Error('handleMagicLinkPostSignInGate must be exported')
+  return handler(ctx, tenantWithRequired(required))
+}
+
+describe('handleMagicLinkPostSignInGate', () => {
+  it('redirects unenrolled team user to /auth/two-factor-setup-required', async () => {
+    mockUserFindFirst.mockResolvedValue({ twoFactorEnabled: false })
+    mockPrincipalFindFirst.mockResolvedValue({ role: 'admin' })
+    const ctx = buildCtx({ path: '/magic-link/verify' })
+
+    await expect(callMagicLinkGate(ctx, true)).rejects.toThrow(
+      'REDIRECT:/auth/two-factor-setup-required'
+    )
+
+    expect(mockDelete).toHaveBeenCalledTimes(1)
+  })
+
+  it('refuses enrolled team user with use_password_for_2fa redirect', async () => {
+    // Enrolled user tried magic-link — BA twoFactor plugin only
+    // challenges on password paths. Force them to password+TOTP.
+    mockUserFindFirst.mockResolvedValue({ twoFactorEnabled: true })
+    mockPrincipalFindFirst.mockResolvedValue({ role: 'admin' })
+    const ctx = buildCtx({ path: '/magic-link/verify' })
+
+    await expect(callMagicLinkGate(ctx, true)).rejects.toThrow(
+      'REDIRECT:/admin/login?error=use_password_for_2fa'
+    )
+
+    expect(mockDelete).toHaveBeenCalledTimes(1)
+  })
+
+  it('refuses enrolled member too (gate is role-uniform across team)', async () => {
+    mockUserFindFirst.mockResolvedValue({ twoFactorEnabled: true })
+    mockPrincipalFindFirst.mockResolvedValue({ role: 'member' })
+    const ctx = buildCtx({ path: '/magic-link/verify' })
+
+    await expect(callMagicLinkGate(ctx, true)).rejects.toThrow(/use_password_for_2fa/)
+  })
+
+  it('allows portal user magic-link even when workspace required (team policy only)', async () => {
+    mockUserFindFirst.mockResolvedValue({ twoFactorEnabled: false })
+    mockPrincipalFindFirst.mockResolvedValue({ role: 'user' })
+    const ctx = buildCtx({ path: '/magic-link/verify' })
+
+    await callMagicLinkGate(ctx, true)
+
+    expect(mockDelete).not.toHaveBeenCalled()
+    expect(ctx.redirect).not.toHaveBeenCalled()
+  })
+
+  it('allows magic-link when workspace toggle is off', async () => {
+    const ctx = buildCtx({ path: '/magic-link/verify' })
+
+    await callMagicLinkGate(ctx, false)
+
+    expect(mockUserFindFirst).not.toHaveBeenCalled()
+    expect(mockDelete).not.toHaveBeenCalled()
+    expect(ctx.redirect).not.toHaveBeenCalled()
+  })
+
+  it('also fires on /sign-in/email-otp (email-OTP shares the magic-link plugin)', async () => {
+    mockUserFindFirst.mockResolvedValue({ twoFactorEnabled: true })
+    mockPrincipalFindFirst.mockResolvedValue({ role: 'admin' })
+    const ctx = buildCtx({ path: '/sign-in/email-otp' })
+
+    await expect(callMagicLinkGate(ctx, true)).rejects.toThrow(/use_password_for_2fa/)
+  })
+
+  it('does NOT fire on credential paths (handled by the other gate)', async () => {
+    const ctx = buildCtx({ path: '/sign-in/email' })
+
+    await callMagicLinkGate(ctx, true)
+
+    expect(mockUserFindFirst).not.toHaveBeenCalled()
+    expect(mockDelete).not.toHaveBeenCalled()
+  })
+
+  it('does NOT fire on /sign-in/magic-link (the send endpoint — no session yet)', async () => {
+    // `/sign-in/magic-link` sends the email but doesn't create a session.
+    // The gate only fires on verify paths where newSession exists.
+    const ctx = buildCtx({ path: '/sign-in/magic-link' })
+
+    await callMagicLinkGate(ctx, true)
+
+    expect(mockUserFindFirst).not.toHaveBeenCalled()
+    expect(mockDelete).not.toHaveBeenCalled()
+  })
+
+  it('bails when newSession is missing', async () => {
+    const ctx = buildCtx({ path: '/magic-link/verify', context: { newSession: null } })
+
+    await callMagicLinkGate(ctx, true)
+
+    expect(mockDelete).not.toHaveBeenCalled()
+    expect(ctx.redirect).not.toHaveBeenCalled()
+  })
+
+  // Sanity: the path set is exhaustive — the gate fires on every magic-
+  // link path that creates a session.
+  it.each(MAGIC_LINK_PATHS)('fires on %s', async (path) => {
+    mockUserFindFirst.mockResolvedValue({ twoFactorEnabled: false })
+    mockPrincipalFindFirst.mockResolvedValue({ role: 'admin' })
+    const ctx = buildCtx({ path })
+
+    await expect(callMagicLinkGate(ctx, true)).rejects.toThrow(/two-factor-setup-required/)
   })
 })
