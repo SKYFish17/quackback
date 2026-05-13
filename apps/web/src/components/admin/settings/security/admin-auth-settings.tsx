@@ -2,13 +2,7 @@ import { useEffect, useMemo, useState, useTransition } from 'react'
 import { useRouter } from '@tanstack/react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import {
-  ArrowPathIcon,
-  ArrowTopRightOnSquareIcon,
-  EnvelopeIcon,
-  KeyIcon,
-  ShieldCheckIcon,
-} from '@heroicons/react/24/solid'
+import { ArrowPathIcon, ArrowTopRightOnSquareIcon } from '@heroicons/react/24/solid'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
@@ -22,7 +16,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { MethodRow } from '@/components/admin/settings/auth-shared/method-row'
 import { CopyButton } from '@/components/shared/copy-button'
 import { ConfirmDialog } from '@/components/shared/confirm-dialog'
 import { SettingsCard } from '@/components/admin/settings/settings-card'
@@ -96,36 +89,7 @@ export function AdminAuthSettings({
     (useRouteContext({ from: '__root__' }) as { managedFieldPaths?: string[] }) ?? {}
   const isManaged = (path: string) => isPathManagedFromBootstrap(path, managedFieldPaths)
 
-  const oauthState = (authConfig.oauth ?? {}) as Record<string, boolean | undefined>
-  // Matches the server-side gate semantics: undefined => enabled (v0.9.9
-  // and earlier had no `password` key; we keep their sign-in working
-  // post-upgrade). Only an explicit `false` flips the toggle off.
-  const passwordEnabled = oauthState.password !== false
-  const magicLinkEnabled = oauthState.magicLink !== false
   const ssoConfig = authConfig.ssoOidc
-
-  // "SSO is a viable fallback path" means: admin-enabled AND the
-  // runtime would actually register the provider (secret stored, tier
-  // permits). Just `ssoConfig.enabled === true` is not enough —
-  // without a saved secret the OAuth provider never registers, so
-  // disabling password+magic-link in that state leaves the workspace
-  // with NO usable sign-in method.
-  //
-  // `customOidcProviderTier` is the tier-level gate (false → SSO is
-  // not allowed on this tier regardless of admin config).
-  // `ssoStatus.secretConfigured` is the runtime check (false → admin
-  // hasn't saved the OIDC client secret yet, so the provider won't
-  // register even if `enabled=true` is set).
-  const ssoActive =
-    ssoConfig?.enabled === true && customOidcProviderTier && ssoStatus.secretConfigured
-
-  // Team sign-in methods: password (optional) + magic-link (optional) +
-  // SSO (optional, only when viable per above). At least one
-  // user-facing method must remain enabled. Disabling the last
-  // password/magic-link toggle without a viable SSO fallback would
-  // produce a locked-out workspace.
-  const enabledMethodCount = (passwordEnabled ? 1 : 0) + (magicLinkEnabled ? 1 : 0)
-  const isLastTeamMethod = (current: boolean) => current && enabledMethodCount === 1 && !ssoActive
 
   const save = async (input: Parameters<typeof updateAuthConfigFn>[0]['data']) => {
     setSaving(true)
@@ -151,97 +115,8 @@ export function AdminAuthSettings({
     }
   }
 
-  const togglePassword = (checked: boolean) => {
-    setAuthConfig((prev: AuthConfig) => ({
-      ...prev,
-      oauth: { ...(prev.oauth ?? {}), password: checked },
-    }))
-    void save({ oauth: { password: checked } })
-  }
-
-  const toggleMagicLink = (checked: boolean) => {
-    setAuthConfig((prev: AuthConfig) => ({
-      ...prev,
-      oauth: { ...(prev.oauth ?? {}), magicLink: checked },
-    }))
-    void save({ oauth: { magicLink: checked } })
-  }
-
-  const twoFactorRequired = authConfig.twoFactor?.required === true
-  const toggleTwoFactorRequired = (checked: boolean) => {
-    setAuthConfig((prev: AuthConfig) => ({
-      ...prev,
-      twoFactor: { ...(prev.twoFactor ?? { required: false }), required: checked },
-    }))
-    void save({ twoFactor: { required: checked } })
-  }
-
   return (
     <div className="space-y-6">
-      <SettingsCard
-        title="Sign-in methods"
-        description="Email magic link is always on for invitations and recovery. Single sign-on is managed below."
-        contentClassName="space-y-4"
-      >
-        <MethodRow
-          icon={KeyIcon}
-          label="Password"
-          description="Sign in with email and password."
-          checked={passwordEnabled}
-          onCheckedChange={togglePassword}
-          disabled={
-            saving ||
-            isPending ||
-            isManaged('auth.oauth.password') ||
-            isLastTeamMethod(passwordEnabled) ||
-            (passwordEnabled && twoFactorRequired)
-          }
-          badge={isManaged('auth.oauth.password') ? 'Managed' : undefined}
-        />
-        <MethodRow
-          icon={EnvelopeIcon}
-          label="Magic link"
-          description="Sign in with a one-click link emailed to the user. Invitations and recovery-code flows always work — this toggle only controls whether the option appears on the team sign-in form."
-          checked={magicLinkEnabled}
-          onCheckedChange={toggleMagicLink}
-          disabled={
-            saving ||
-            isPending ||
-            isManaged('auth.oauth.magicLink') ||
-            isLastTeamMethod(magicLinkEnabled)
-          }
-          badge={isManaged('auth.oauth.magicLink') ? 'Managed' : undefined}
-        />
-        <MethodRow
-          icon={ShieldCheckIcon}
-          label="Require 2FA for team members"
-          description={
-            passwordEnabled
-              ? 'Admins and members must complete a TOTP challenge on every password sign-in, and magic-link sign-in is refused for users who have enrolled. Recovery codes remain available as the break-glass.'
-              : 'Enable Password sign-in first — enrolling a TOTP authenticator requires confirming a password.'
-          }
-          checked={twoFactorRequired}
-          onCheckedChange={toggleTwoFactorRequired}
-          disabled={saving || isPending || isManaged('auth.twoFactor.required') || !passwordEnabled}
-          badge={isManaged('auth.twoFactor.required') ? 'Managed' : undefined}
-        />
-        <MethodRow
-          icon={EnvelopeIcon}
-          label="Email me when a new device signs in"
-          description="When someone signs in from a browser or network we haven’t seen before, we’ll send the account owner an email. First-line defense against credential compromise."
-          checked={authConfig.security?.notifyOnNewSignIn !== false}
-          onCheckedChange={(checked) => {
-            setAuthConfig((prev: AuthConfig) => ({
-              ...prev,
-              security: { ...(prev.security ?? {}), notifyOnNewSignIn: checked },
-            }))
-            void save({ security: { notifyOnNewSignIn: checked } })
-          }}
-          disabled={saving || isPending || isManaged('auth.security.notifyOnNewSignIn')}
-          badge={isManaged('auth.security.notifyOnNewSignIn') ? 'Managed' : undefined}
-        />
-      </SettingsCard>
-
       <SettingsCard
         title="Single sign-on"
         description="Connect your company's identity provider (Okta, Auth0, Microsoft Entra, Google Workspace, Keycloak, or any OpenID Connect IdP)."
