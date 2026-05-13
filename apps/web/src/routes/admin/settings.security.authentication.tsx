@@ -7,7 +7,7 @@ import { ShieldCheckIcon } from '@heroicons/react/24/solid'
 import { BackLink } from '@/components/ui/back-link'
 import { PageHeader } from '@/components/shared/page-header'
 import { AuthSettings, type AuthTab } from '@/components/admin/settings/security/auth-settings'
-import { RecoveryCodesSection } from '@/components/admin/settings/security/recovery-codes-section'
+import { RecoveryCodesSection } from '@/components/admin/settings/security/sso/recovery-codes-section'
 import { DEFAULT_PORTAL_CONFIG } from '@/lib/shared/types/settings'
 
 const searchSchema = z.object({

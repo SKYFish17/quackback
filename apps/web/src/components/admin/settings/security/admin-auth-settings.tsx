@@ -26,8 +26,8 @@ import { MethodRow } from '@/components/admin/settings/auth-shared/method-row'
 import { CopyButton } from '@/components/shared/copy-button'
 import { ConfirmDialog } from '@/components/shared/confirm-dialog'
 import { SettingsCard } from '@/components/admin/settings/settings-card'
-import { VerifiedDomainBlock } from './verified-domain-block'
-import { AttributeMappingSection } from './attribute-mapping-section'
+import { VerifiedDomainsSection } from './sso/verified-domains-section'
+import { AttributeMappingSection } from './sso/attribute-mapping-section'
 import { TimeAgo } from '@/components/ui/time-ago'
 import {
   OktaIcon,
@@ -45,7 +45,7 @@ import { isPathManagedFromBootstrap } from '@/lib/client/config-file'
 import { useRouteContext } from '@tanstack/react-router'
 import type { AuthConfig } from '@/lib/shared/types/settings'
 import type { SsoStatus } from '@/lib/server/functions/sso'
-import { TestSignInButton } from './test-sign-in-button'
+import { TestSignInButton } from './sso/test-sign-in-button'
 
 interface AdminAuthSettingsProps {
   initialConfig: AuthConfig
@@ -133,7 +133,7 @@ export function AdminAuthSettings({
       const updated = await updateAuthConfigFn({ data: input })
       setAuthConfig(updated)
       // Invalidate the React Query cache so suspense consumers (e.g.
-      // <VerifiedDomainBlock>'s verified-but-disabled alert) re-render
+      // <VerifiedDomainsSection>'s verified-but-disabled alert) re-render
       // with the saved state immediately, not after the 5-minute
       // stale-time. router.invalidate() alone does NOT refetch
       // suspense queries.
@@ -680,7 +680,7 @@ function SsoConfiguredForm({
 
       {/* Section 2 — Verified domains (policy layer, depends on connection). */}
       <div className="pt-6 border-t border-border/40">
-        <VerifiedDomainBlock />
+        <VerifiedDomainsSection />
       </div>
 
       {/* Section 3 — IdP-attribute-based role mapping. */}

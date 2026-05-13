@@ -53,7 +53,7 @@ const VERIFY_REASON_MESSAGES: Record<
  * Self-contained data: reads `settingsQueries.verifiedDomains()` and
  * invalidates that key + `ssoStatus` after every mutation.
  */
-export function VerifiedDomainBlock() {
+export function VerifiedDomainsSection() {
   const domainsQuery = useSuspenseQuery(settingsQueries.verifiedDomains())
   const ssoEnabledQuery = useSuspenseQuery(settingsQueries.authConfig())
   const ssoStatusQuery = useSuspenseQuery(adminQueries.ssoStatus())
