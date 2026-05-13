@@ -88,6 +88,7 @@ export function RecoveryCodesSection() {
           size="sm"
           onClick={() => generate.mutate()}
           disabled={generate.isPending}
+          className="h-9"
         >
           {generate.isPending ? 'Generating…' : 'Generate new codes'}
         </Button>

@@ -514,7 +514,7 @@ function SsoConfiguredForm({
                 }}
                 disabled={fieldManaged('autoProvisionRole') || saving}
               >
-                <SelectTrigger className="h-8 w-[140px] text-xs" aria-label="Default role">
+                <SelectTrigger className="h-9 w-[140px] text-xs" aria-label="Default role">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

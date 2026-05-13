@@ -312,7 +312,13 @@ function CustomOidcCard({
             </p>
           ) : !configured ? (
             <div className="mt-4">
-              <Button type="button" size="sm" onClick={onConfigure} disabled={managed}>
+              <Button
+                type="button"
+                size="sm"
+                onClick={onConfigure}
+                disabled={managed}
+                className="h-9"
+              >
                 Set up custom OIDC
               </Button>
             </div>
@@ -324,6 +330,7 @@ function CustomOidcCard({
                 size="sm"
                 onClick={onConfigure}
                 disabled={managed}
+                className="h-9"
               >
                 Edit configuration
               </Button>

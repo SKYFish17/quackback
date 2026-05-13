@@ -148,12 +148,13 @@ export function AttributeMappingSection({ currentMapping }: AttributeMappingSect
                     size="sm"
                     onClick={() => removeRule(index)}
                     aria-label="Remove rule"
+                    className="h-9"
                   >
                     <TrashIcon className="size-3.5" />
                   </Button>
                 </div>
               ))}
-              <Button variant="outline" size="sm" onClick={addRule}>
+              <Button variant="outline" size="sm" onClick={addRule} className="h-9">
                 <PlusIcon className="size-3.5" />
                 Add rule
               </Button>

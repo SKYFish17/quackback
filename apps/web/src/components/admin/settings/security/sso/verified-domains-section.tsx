@@ -248,7 +248,13 @@ function DomainRow({
         <TableCell className="text-right align-top">
           <div className="flex justify-end gap-1">
             {!isVerified && (
-              <Button size="sm" variant="secondary" onClick={handleVerify} disabled={pending}>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={handleVerify}
+                disabled={pending}
+                className="h-9"
+              >
                 {pending ? 'Verifying…' : 'Verify'}
               </Button>
             )}
@@ -259,7 +265,7 @@ function DomainRow({
               disabled={pending}
               aria-label={`Remove ${domain.name}`}
               title={`Remove ${domain.name}`}
-              className="h-8 w-8 text-muted-foreground hover:text-destructive"
+              className="h-9 w-9 text-muted-foreground hover:text-destructive"
             >
               <TrashIcon className="h-4 w-4" />
             </Button>
