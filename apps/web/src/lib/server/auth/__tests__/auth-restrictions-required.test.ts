@@ -18,6 +18,19 @@ const baseConfig: AuthConfig = {
   openSignup: false,
 }
 
+/** Defaults for the SSO sub-tree — `enabled: true` so policy fires. */
+const baseSso = {
+  enabled: true,
+  discoveryUrl: 'https://idp.example/.well-known/openid-configuration',
+  clientId: 'cid',
+  autoCreateUsers: false,
+} as const
+
+const configWithSso = (overrides: Record<string, unknown> = {}): AuthConfig => ({
+  ...baseConfig,
+  ssoOidc: { ...baseSso, ...overrides } as never,
+})
+
 const enforcedDomain: VerifiedDomain = {
   id: 'domain_acme' as `domain_${string}`,
   name: 'acme.com',
@@ -87,13 +100,7 @@ describe('isHardBound — workspace-wide branch', () => {
 
   it('does nothing when required=false / undefined', () => {
     expect(
-      isHardBound(
-        'credential',
-        'foo@example.com',
-        'admin',
-        { ...baseConfig, ssoOidc: { enabled: true, required: false } as never },
-        []
-      )
+      isHardBound('credential', 'foo@example.com', 'admin', configWithSso({ required: false }), [])
     ).toBe(false)
     expect(isHardBound('credential', 'foo@example.com', 'admin', baseConfig, [])).toBe(false)
   })
@@ -101,47 +108,77 @@ describe('isHardBound — workspace-wide branch', () => {
 
 describe('isHardBound — per-domain branch (regression)', () => {
   it('still blocks emails at enforced verified domains', () => {
-    expect(isHardBound('credential', 'a@acme.com', 'admin', baseConfig, [enforcedDomain])).toBe(
-      true
-    )
+    expect(
+      isHardBound('credential', 'a@acme.com', 'admin', configWithSso(), [enforcedDomain])
+    ).toBe(true)
   })
 
   it('does NOT block when verified domain has enforced=false', () => {
-    expect(isHardBound('credential', 'a@acme.com', 'admin', baseConfig, [verifiedDomain])).toBe(
-      false
-    )
+    expect(
+      isHardBound('credential', 'a@acme.com', 'admin', configWithSso(), [verifiedDomain])
+    ).toBe(false)
   })
 })
 
 describe('isHardBound — OR semantics', () => {
   it('returns true when both branches would block', () => {
     expect(
-      isHardBound(
-        'credential',
-        'a@acme.com',
-        'admin',
-        { ...baseConfig, ssoOidc: { enabled: true, required: true } as never },
-        [enforcedDomain]
-      )
+      isHardBound('credential', 'a@acme.com', 'admin', configWithSso({ required: true }), [
+        enforcedDomain,
+      ])
     ).toBe(true)
   })
 
   it('returns true when only the workspace-wide branch blocks', () => {
     expect(
-      isHardBound(
-        'credential',
-        'a@example.com',
-        'admin',
-        { ...baseConfig, ssoOidc: { enabled: true, required: true } as never },
-        []
-      )
+      isHardBound('credential', 'a@example.com', 'admin', configWithSso({ required: true }), [])
     ).toBe(true)
   })
 
   it('returns true when only the per-domain branch blocks', () => {
+    expect(
+      isHardBound('credential', 'a@acme.com', 'admin', configWithSso(), [enforcedDomain])
+    ).toBe(true)
+  })
+})
+
+describe('isHardBound — master switch (ssoOidc.enabled)', () => {
+  // The workspace `enabled` toggle is the master switch. When admin
+  // disables SSO, all downstream enforcement (`required`, per-domain
+  // `enforced`) becomes dormant. Stale rows shouldn't keep blocking
+  // sign-ins after the admin has switched SSO off.
+  it('returns false when ssoOidc is absent (never configured)', () => {
     expect(isHardBound('credential', 'a@acme.com', 'admin', baseConfig, [enforcedDomain])).toBe(
-      true
+      false
     )
+  })
+
+  it('returns false when ssoOidc.enabled=false even with a stale enforced-domain row', () => {
+    expect(
+      isHardBound('credential', 'a@acme.com', 'admin', configWithSso({ enabled: false }), [
+        enforcedDomain,
+      ])
+    ).toBe(false)
+  })
+
+  it('returns false when ssoOidc.enabled=false even with stale workspace required=true', () => {
+    expect(
+      isHardBound(
+        'credential',
+        'a@example.com',
+        'admin',
+        configWithSso({ enabled: false, required: true }),
+        []
+      )
+    ).toBe(false)
+  })
+
+  it('returns false for magic-link too when ssoOidc.enabled=false', () => {
+    expect(
+      isHardBound('magic-link', 'a@acme.com', 'admin', configWithSso({ enabled: false }), [
+        enforcedDomain,
+      ])
+    ).toBe(false)
   })
 })
 

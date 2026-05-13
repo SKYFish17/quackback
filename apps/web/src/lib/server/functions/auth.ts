@@ -57,11 +57,27 @@ export const lookupAuthMethodsFn = createServerFn({ method: 'POST' })
         ? (tenant?.publicPortalConfig?.oauth ?? {})
         : (tenant?.publicAuthConfig?.oauth ?? {})
 
+    // Master switch: when SSO is disabled at the workspace level,
+    // every downstream toggle (workspace `required`, per-domain
+    // `enforced`) is dormant. Common state: admin configured SSO,
+    // verified a domain, then flipped `enabled` off (switching IdPs,
+    // pausing rollout, simplifying the login form). The verified-
+    // domain row + `required` flag outlive the master toggle, but the
+    // user-facing message should be "methods", not "sso unavailable" —
+    // the latter implies the admin needs to fix something.
+    if (sso?.enabled !== true) {
+      return {
+        kind: 'methods',
+        authConfig: methodsConfig,
+        ssoEnabled: false,
+      }
+    }
+
     // Workspace-wide enforcement branch: when ssoOidc.required is on
     // and we're answering for the team surface, every team email gets
     // sso-redirect — no per-email check (would leak existence). Same
     // unavailable guard as the per-domain branch.
-    if (data.surface === 'team' && sso?.required === true) {
+    if (data.surface === 'team' && sso.required === true) {
       const { isSsoActuallyRegistered } = await import('@/lib/server/auth/sso-secret')
       const { getTierLimits } = await import('@/lib/server/domains/settings/tier-limits.service')
       const registered = await isSsoActuallyRegistered(sso, await getTierLimits())
@@ -94,6 +110,6 @@ export const lookupAuthMethodsFn = createServerFn({ method: 'POST' })
     return {
       kind: 'methods',
       authConfig: methodsConfig,
-      ssoEnabled: Boolean(sso?.enabled),
+      ssoEnabled: true,
     }
   })

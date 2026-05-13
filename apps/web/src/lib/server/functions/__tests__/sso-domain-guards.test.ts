@@ -406,3 +406,53 @@ describe('lookupAuthMethodsFn — SSO registration drift', () => {
     expect(result).toEqual({ kind: 'sso-redirect' })
   })
 })
+
+describe('lookupAuthMethodsFn — SSO deliberately disabled with stale verified-domain rows', () => {
+  // Common real-world state: admin configured SSO + verified a domain,
+  // then later flipped `ssoOidc.enabled` off (perhaps switching IdPs,
+  // pausing rollout, or simplifying the login form). The verified-
+  // domain row outlives the toggle. The lookup must fall through to
+  // the methods form — showing "Single sign-on is configured but not
+  // available" implies the admin needs to fix something, which is
+  // wrong when they deliberately disabled it.
+  it('falls through to methods (not sso-unavailable) when ssoOidc.enabled=false and a verified-domain row exists', async () => {
+    hoisted.mockGetTenantSettings.mockResolvedValue({
+      authConfig: {
+        ssoOidc: { ...ssoConfig, enabled: false },
+      },
+      verifiedDomains: [verifiedDomainRow],
+      publicAuthConfig: { oauth: { password: true, magicLink: true } },
+    })
+
+    const result = await lookupAuthMethods({ data: { email: 'foo@acme.com' } })
+    expect(result).toEqual({
+      kind: 'methods',
+      authConfig: { password: true, magicLink: true },
+      ssoEnabled: false,
+    })
+  })
+
+  it('falls through to methods even when the stale verified-domain row was enforced=true', async () => {
+    hoisted.mockGetTenantSettings.mockResolvedValue({
+      authConfig: {
+        ssoOidc: { ...ssoConfig, enabled: false },
+      },
+      verifiedDomains: [enforcedDomainRow],
+      publicAuthConfig: { oauth: { password: true } },
+    })
+
+    const result = await lookupAuthMethods({ data: { email: 'foo@acme.com' } })
+    expect(result).toMatchObject({ kind: 'methods', ssoEnabled: false })
+  })
+
+  it('falls through to methods when ssoOidc is entirely absent (never configured)', async () => {
+    hoisted.mockGetTenantSettings.mockResolvedValue({
+      authConfig: {},
+      verifiedDomains: [verifiedDomainRow],
+      publicAuthConfig: { oauth: { password: true } },
+    })
+
+    const result = await lookupAuthMethods({ data: { email: 'foo@acme.com' } })
+    expect(result).toMatchObject({ kind: 'methods', ssoEnabled: false })
+  })
+})

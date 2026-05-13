@@ -51,6 +51,7 @@ const { handleSignInPreCheck } = await import('../hooks')
 
 type Ctx = Parameters<typeof handleSignInPreCheck>[0]
 type Knobs = {
+  ssoEnabled?: boolean
   required?: boolean
   allowMagicLinkUnderRequired?: boolean
   passwordEnabled?: boolean
@@ -63,6 +64,10 @@ const tenant = (k: Knobs = {}) =>
     authConfig: makeAuthConfig({
       oauth: { password: k.passwordEnabled, magicLink: k.magicLinkEnabled },
       ssoOidc: {
+        // `enabled` defaults to true so existing tests exercising
+        // workspace-required / per-domain enforcement keep their semantics.
+        // Tests that need a disabled-SSO workspace pass `ssoEnabled: false`.
+        enabled: k.ssoEnabled ?? true,
         required: k.required,
         allowMagicLinkUnderRequired: k.allowMagicLinkUnderRequired,
       },
@@ -346,5 +351,62 @@ describe('handleSignInPreCheck — isAuthMethodAllowed gate', () => {
 
     await handleSignInPreCheck(ctx)
     expect(ctx.redirect).not.toHaveBeenCalled()
+  })
+})
+
+// ============================================================
+// Master switch: ssoOidc.enabled=false makes all enforcement dormant
+// ============================================================
+
+describe('handleSignInPreCheck — ssoOidc.enabled=false (workspace SSO disabled)', () => {
+  it('does NOT block admin password sign-in even with stale enforced verified-domain row', async () => {
+    mockGetTenantSettings.mockResolvedValue(
+      tenant({
+        ssoEnabled: false,
+        verifiedDomains: [makeVerifiedDomain('acme.com', true)],
+      })
+    )
+    mockUserFindFirst.mockResolvedValue({ id: 'user_1' })
+    mockPrincipalFindFirst.mockResolvedValue({ role: 'admin' })
+    const ctx = ctxFor('/sign-in/email', { email: 'a@acme.com' })
+
+    await handleSignInPreCheck(ctx)
+    expect(ctx.redirect).not.toHaveBeenCalled()
+  })
+
+  it('does NOT block admin magic-link with stale enforced verified-domain row', async () => {
+    mockGetTenantSettings.mockResolvedValue(
+      tenant({
+        ssoEnabled: false,
+        verifiedDomains: [makeVerifiedDomain('acme.com', true)],
+      })
+    )
+    mockUserFindFirst.mockResolvedValue({ id: 'user_1' })
+    mockPrincipalFindFirst.mockResolvedValue({ role: 'admin' })
+    const ctx = ctxFor('/sign-in/magic-link', { email: 'a@acme.com' })
+
+    await handleSignInPreCheck(ctx)
+    expect(ctx.redirect).not.toHaveBeenCalled()
+  })
+
+  it('does NOT block admin password sign-in even with stale workspace required=true', async () => {
+    mockGetTenantSettings.mockResolvedValue(tenant({ ssoEnabled: false, required: true }))
+    mockUserFindFirst.mockResolvedValue({ id: 'user_1' })
+    mockPrincipalFindFirst.mockResolvedValue({ role: 'admin' })
+    const ctx = ctxFor('/sign-in/email', { email: 'a@anywhere.com' })
+
+    await handleSignInPreCheck(ctx)
+    expect(ctx.redirect).not.toHaveBeenCalled()
+  })
+
+  it('still gates by method-allowed (password disabled → still blocks)', async () => {
+    // The master SSO switch only affects SSO enforcement. Other policy
+    // (oauth.password=false) keeps working independently.
+    mockGetTenantSettings.mockResolvedValue(tenant({ ssoEnabled: false, passwordEnabled: false }))
+    mockUserFindFirst.mockResolvedValue({ id: 'user_1' })
+    mockPrincipalFindFirst.mockResolvedValue({ role: 'admin' })
+    const ctx = ctxFor('/sign-in/email', { email: 'a@anywhere.com' })
+
+    await expect(handleSignInPreCheck(ctx)).rejects.toThrow(/password_method_not_allowed/)
   })
 })

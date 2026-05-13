@@ -181,6 +181,11 @@ const HARD_BOUND_PROVIDERS = new Set<AuthProvider>(['credential', 'magic-link'])
  * Portal users (role='user') are never bound by the workspace-wide
  * branch — they're not gated by SSO at all. The per-domain branch
  * still applies because that's email-driven, not role-driven.
+ *
+ * Both branches are dormant when the workspace-level master toggle
+ * `ssoOidc.enabled` is off. Stale `required` and `enforced` rows from
+ * a previously-active SSO config should not block sign-in once the
+ * admin has switched SSO off.
  */
 export function isHardBound(
   provider: AuthProvider,
@@ -192,8 +197,10 @@ export function isHardBound(
   if (!HARD_BOUND_PROVIDERS.has(provider)) return false
 
   const sso = authConfig?.ssoOidc
+  if (sso?.enabled !== true) return false
+
   const isTeamRole = role === 'admin' || role === 'member'
-  if (isTeamRole && sso?.required === true) {
+  if (isTeamRole && sso.required === true) {
     // Magic-link escape: only when explicitly opted into.
     if (provider === 'magic-link' && sso.allowMagicLinkUnderRequired === true) {
       // Workspace-wide branch doesn't bind, but a per-domain enforced
