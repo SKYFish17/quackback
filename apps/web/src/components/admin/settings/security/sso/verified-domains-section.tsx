@@ -84,7 +84,8 @@ export function VerifiedDomainsSection() {
         />
       )}
 
-      <div className="rounded-md border border-border/50 overflow-hidden">
+      {/* md+: table layout */}
+      <div className="hidden md:block rounded-md border border-border/50 overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow>
@@ -113,6 +114,19 @@ export function VerifiedDomainsSection() {
             />
           </TableFooter>
         </Table>
+      </div>
+
+      {/* below md: stacked card layout */}
+      <div className="md:hidden rounded-md border border-border/50 overflow-hidden divide-y divide-border/50">
+        {domains.length === 0 && (
+          <p className="text-center text-xs text-muted-foreground py-6">
+            No domains yet. Add one below to route those emails to SSO.
+          </p>
+        )}
+        {domains.map((d) => (
+          <DomainCard key={d.id} domain={d} bootstrapEligible={bootstrapEligible} />
+        ))}
+        <AddDomainCardRow atCap={domains.length >= MAX_VERIFIED_DOMAINS} count={domains.length} />
       </div>
     </div>
   )
@@ -324,14 +338,228 @@ function DomainRow({
 }
 
 /**
- * Table-footer row for adding a new domain. Two states:
- *  - Collapsed: a single `+ Add domain` cell that spans the table.
- *  - Editing: input + Add / Cancel, with optional inline error.
- *
- * Keeps the add affordance inside the table itself (no separate form
- * below) so the "list of domains" reads as a single object.
+ * Mobile card for a single verified domain — shown below the md
+ * breakpoint in place of the table row. Shares all mutation logic
+ * with DomainRow; the DNS-instruction block expands inline when the
+ * domain is pending, same as the table version.
  */
-function AddDomainFooter({ atCap, count }: { atCap: boolean; count: number }) {
+function DomainCard({
+  domain,
+  bootstrapEligible,
+}: {
+  domain: VerifiedDomain
+  bootstrapEligible: boolean
+}) {
+  const queryClient = useQueryClient()
+  const remove = useServerFn(removeVerifiedDomainFn)
+  const verify = useServerFn(verifyDomainFn)
+  const setEnforced = useServerFn(setVerifiedDomainEnforcedFn)
+
+  const [pending, setPending] = useState(false)
+  const [verifyResult, setVerifyResult] = useState<VerifyDomainResult | null>(null)
+  const [enforceError, setEnforceError] = useState<string | null>(null)
+  const [removeOpen, setRemoveOpen] = useState(false)
+  const [enforceConfirmOpen, setEnforceConfirmOpen] = useState(false)
+
+  const isVerified = domain.verifiedAt !== null
+
+  const refresh = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['settings', 'verifiedDomains'] }),
+      queryClient.invalidateQueries({ queryKey: ['admin', 'ssoStatus'] }),
+    ])
+  }
+
+  async function handleVerify() {
+    setVerifyResult(null)
+    setPending(true)
+    try {
+      const r = await verify({ data: { id: domain.id } })
+      setVerifyResult(r)
+      if (r.verified) await refresh()
+    } catch {
+      setVerifyResult({ verified: false, reason: 'lookup-failed' })
+    } finally {
+      setPending(false)
+    }
+  }
+
+  async function handleRemove() {
+    setPending(true)
+    try {
+      await remove({ data: { id: domain.id } })
+      await refresh()
+    } finally {
+      setPending(false)
+      setRemoveOpen(false)
+    }
+  }
+
+  async function applyEnforced(next: boolean) {
+    setEnforceError(null)
+    setPending(true)
+    try {
+      await setEnforced({ data: { id: domain.id, enforced: next } })
+      await refresh()
+    } catch (err) {
+      setEnforceError(err instanceof Error ? err.message : 'Could not change enforcement.')
+    } finally {
+      setPending(false)
+      setEnforceConfirmOpen(false)
+    }
+  }
+
+  const enforcementDisabledReason = !isVerified
+    ? 'Verify this domain first.'
+    : !bootstrapEligible
+      ? 'Sign in via SSO first to enable enforcement.'
+      : null
+
+  return (
+    <>
+      <div className="p-4 space-y-3">
+        {/* Primary identifier */}
+        <div className="flex items-center gap-2">
+          {isVerified ? (
+            <CheckCircleIcon className="h-4 w-4 shrink-0 text-green-600 dark:text-green-400" />
+          ) : (
+            <ClockIcon className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+          )}
+          <span className="font-medium text-sm truncate">{domain.name}</span>
+        </div>
+
+        {/* Secondary fields */}
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>
+            {isVerified ? (
+              <>
+                Verified <TimeAgo date={domain.verifiedAt!} />
+              </>
+            ) : (
+              'Pending verification'
+            )}
+          </span>
+          {isVerified && (
+            <div className="flex items-center gap-2">
+              <Label
+                htmlFor={`require-sso-card-${domain.id}`}
+                className="text-xs text-muted-foreground"
+              >
+                Require SSO
+              </Label>
+              <Switch
+                id={`require-sso-card-${domain.id}`}
+                checked={domain.enforced}
+                onCheckedChange={(next) => {
+                  if (next) {
+                    setEnforceConfirmOpen(true)
+                  } else {
+                    void applyEnforced(false)
+                  }
+                }}
+                disabled={pending || (!domain.enforced && !!enforcementDisabledReason)}
+                aria-label={`Require SSO for ${domain.name}`}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Enforcement hint */}
+        {isVerified && (enforcementDisabledReason || enforceError) && !domain.enforced && (
+          <div>
+            {enforceError && (
+              <Alert variant="destructive">
+                <AlertDescription className="text-xs">{enforceError}</AlertDescription>
+              </Alert>
+            )}
+            {enforcementDisabledReason && !enforceError && (
+              <p className="text-[11px] text-muted-foreground">{enforcementDisabledReason}</p>
+            )}
+          </div>
+        )}
+
+        {/* DNS instructions (pending only) */}
+        {!isVerified && (
+          <div className="space-y-2 bg-muted/30 rounded-md p-3">
+            <p className="text-xs text-muted-foreground">
+              Add this DNS TXT record at your registrar, then tap <b>Verify</b>:
+            </p>
+            <DnsRecordRow label="Name" value={`_quackback-verify.${domain.name}`} />
+            <DnsRecordRow label="Value" value={`qb-domain-verify=${domain.verificationToken}`} />
+            <DnsRecordRow label="Check" value={`dig +short TXT _quackback-verify.${domain.name}`} />
+            {verifyResult && !verifyResult.verified && (
+              <Alert variant="destructive">
+                <AlertDescription className="text-xs">
+                  {VERIFY_REASON_MESSAGES[verifyResult.reason]}
+                </AlertDescription>
+              </Alert>
+            )}
+          </div>
+        )}
+
+        {/* Actions row */}
+        <div className="flex items-center gap-2 pt-1">
+          {!isVerified && (
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={handleVerify}
+              disabled={pending}
+              className="h-9 flex-1"
+            >
+              {pending ? 'Verifying…' : 'Verify'}
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setRemoveOpen(true)}
+            disabled={pending}
+            aria-label={`Remove ${domain.name}`}
+            className="h-9 text-muted-foreground hover:text-destructive"
+          >
+            <TrashIcon className="h-4 w-4 mr-1.5" />
+            Remove
+          </Button>
+        </div>
+      </div>
+
+      <ConfirmDialog
+        open={removeOpen}
+        onOpenChange={setRemoveOpen}
+        title={`Remove ${isVerified ? 'verified' : 'pending'} domain?`}
+        description={
+          isVerified
+            ? `Stops routing *@${domain.name} emails to SSO and disables hard-binding.`
+            : `Discards the pending verification token for ${domain.name}.`
+        }
+        variant="destructive"
+        confirmLabel="Remove"
+        isPending={pending}
+        onConfirm={handleRemove}
+      />
+      <ConfirmDialog
+        open={enforceConfirmOpen}
+        onOpenChange={setEnforceConfirmOpen}
+        title={`Require SSO for ${domain.name}?`}
+        description={`*@${domain.name} will only be able to sign in via SSO. Keep one admin at a different domain so you can recover if your IdP goes down.`}
+        warning={{
+          title: 'This takes effect immediately.',
+        }}
+        confirmLabel="Require SSO"
+        isPending={pending}
+        onConfirm={() => applyEnforced(true)}
+      />
+    </>
+  )
+}
+
+/**
+ * Shared logic for the "add domain" affordance. Renders either the
+ * collapsed trigger or the inline form. The caller wraps this in the
+ * appropriate container (table row or plain div).
+ */
+function useAddDomainState({ atCap, count }: { atCap: boolean; count: number }) {
   const queryClient = useQueryClient()
   const addDomain = useServerFn(addVerifiedDomainFn)
   const [editing, setEditing] = useState(false)
@@ -345,7 +573,7 @@ function AddDomainFooter({ atCap, count }: { atCap: boolean; count: number }) {
     setEditing(false)
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!draftName.trim()) return
     setError('')
@@ -364,25 +592,112 @@ function AddDomainFooter({ atCap, count }: { atCap: boolean; count: number }) {
     }
   }
 
+  return {
+    editing,
+    setEditing,
+    draftName,
+    setDraftName,
+    error,
+    pending,
+    reset,
+    handleSubmit,
+    atCap,
+    count,
+  }
+}
+
+/** Collapsed trigger button — shared between table and card layouts. */
+function AddDomainTrigger({
+  atCap,
+  count,
+  onEdit,
+}: {
+  atCap: boolean
+  count: number
+  onEdit: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onEdit}
+      disabled={atCap}
+      className="flex w-full items-center justify-between px-4 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      <span className="flex items-center gap-2">
+        <PlusIcon className="h-3.5 w-3.5" />
+        Add domain
+      </span>
+      <span>
+        {count} of {MAX_VERIFIED_DOMAINS}
+        {atCap && ' (limit reached)'}
+      </span>
+    </button>
+  )
+}
+
+/** Inline add form — shared between table and card layouts. */
+function AddDomainForm({
+  draftName,
+  setDraftName,
+  error,
+  pending,
+  reset,
+  handleSubmit,
+}: ReturnType<typeof useAddDomainState>) {
+  return (
+    <form onSubmit={handleSubmit} className="space-y-2">
+      <div className="flex items-center gap-2">
+        <Label htmlFor="add-verified-domain" className="sr-only">
+          Domain
+        </Label>
+        <Input
+          id="add-verified-domain"
+          placeholder="acme.com"
+          value={draftName}
+          onChange={(e) => setDraftName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape' && !pending) reset()
+          }}
+          disabled={pending}
+          autoFocus
+          className="h-9"
+        />
+        <Button type="submit" disabled={pending || !draftName.trim()} size="sm" className="h-9">
+          {pending ? 'Adding…' : 'Add'}
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={reset}
+          disabled={pending}
+          className="h-9"
+        >
+          Cancel
+        </Button>
+      </div>
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription className="text-xs">{error}</AlertDescription>
+        </Alert>
+      )}
+    </form>
+  )
+}
+
+/**
+ * Table-footer row for adding a new domain. Used at md+ inside the
+ * `<TableFooter>`. For the mobile card layout, use `AddDomainCardRow`.
+ */
+function AddDomainFooter({ atCap, count }: { atCap: boolean; count: number }) {
+  const state = useAddDomainState({ atCap, count })
+  const { editing, setEditing } = state
+
   if (!editing) {
     return (
       <TableRow className="hover:bg-muted/40">
         <TableCell colSpan={4} className="p-0">
-          <button
-            type="button"
-            onClick={() => setEditing(true)}
-            disabled={atCap}
-            className="flex w-full items-center justify-between px-4 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <span className="flex items-center gap-2">
-              <PlusIcon className="h-3.5 w-3.5" />
-              Add domain
-            </span>
-            <span>
-              {count} of {MAX_VERIFIED_DOMAINS}
-              {atCap && ' (limit reached)'}
-            </span>
-          </button>
+          <AddDomainTrigger atCap={atCap} count={count} onEdit={() => setEditing(true)} />
         </TableCell>
       </TableRow>
     )
@@ -391,38 +706,32 @@ function AddDomainFooter({ atCap, count }: { atCap: boolean; count: number }) {
   return (
     <TableRow className="hover:bg-transparent">
       <TableCell colSpan={4} className="bg-muted/30">
-        <form onSubmit={handleSubmit} className="space-y-2">
-          <div className="flex items-center gap-2">
-            <Label htmlFor="add-verified-domain" className="sr-only">
-              Domain
-            </Label>
-            <Input
-              id="add-verified-domain"
-              placeholder="acme.com"
-              value={draftName}
-              onChange={(e) => setDraftName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape' && !pending) reset()
-              }}
-              disabled={pending}
-              autoFocus
-              className="h-9"
-            />
-            <Button type="submit" disabled={pending || !draftName.trim()} size="sm">
-              {pending ? 'Adding…' : 'Add'}
-            </Button>
-            <Button type="button" variant="ghost" size="sm" onClick={reset} disabled={pending}>
-              Cancel
-            </Button>
-          </div>
-          {error && (
-            <Alert variant="destructive">
-              <AlertDescription className="text-xs">{error}</AlertDescription>
-            </Alert>
-          )}
-        </form>
+        <AddDomainForm {...state} />
       </TableCell>
     </TableRow>
+  )
+}
+
+/**
+ * Non-table version of the add-domain affordance. Used below md in
+ * the stacked card layout.
+ */
+function AddDomainCardRow({ atCap, count }: { atCap: boolean; count: number }) {
+  const state = useAddDomainState({ atCap, count })
+  const { editing, setEditing } = state
+
+  if (!editing) {
+    return (
+      <div className="hover:bg-muted/40">
+        <AddDomainTrigger atCap={atCap} count={count} onEdit={() => setEditing(true)} />
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-muted/30 px-4 py-3">
+      <AddDomainForm {...state} />
+    </div>
   )
 }
 

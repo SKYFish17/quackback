@@ -216,7 +216,7 @@ export function AuditLogPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <Select value={eventType} onValueChange={setEventType}>
-            <SelectTrigger className="h-8 w-64 text-xs">
+            <SelectTrigger className="h-9 w-full sm:w-64 text-xs">
               <SelectValue placeholder="Event type" />
             </SelectTrigger>
             <SelectContent>
@@ -228,7 +228,7 @@ export function AuditLogPage() {
             </SelectContent>
           </Select>
           <Select value={timeRange} onValueChange={(v) => setTimeRange(v as TimeRange)}>
-            <SelectTrigger className="h-8 w-36 text-xs">
+            <SelectTrigger className="h-9 w-full sm:w-36 text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -244,7 +244,7 @@ export function AuditLogPage() {
             placeholder="Filter by actor email"
             value={actorEmailInput}
             onChange={(e) => setActorEmailInput(e.target.value)}
-            className="h-8 w-56 text-xs"
+            className="h-9 w-full sm:w-56 text-xs"
             aria-label="Filter audit events by actor email"
           />
         </div>
@@ -253,19 +253,18 @@ export function AuditLogPage() {
           size="sm"
           onClick={() => downloadCsv(rows)}
           disabled={rows.length === 0}
+          className="h-9"
         >
           <ArrowDownTrayIcon className="size-3.5" />
           Export CSV
         </Button>
       </div>
 
-      {/* `overflow-x-auto` so the table can scroll horizontally when
-       *  the viewport is narrower than the natural column widths,
-       *  rather than wrapping each cell into a stack of single-word
-       *  lines. `table-fixed` with explicit widths gives the
-       *  browser something to lay out against — without it the
-       *  longest target ID dictates column distribution. */}
-      <div className="overflow-x-auto rounded-md border">
+      {/* md+: horizontal-scrolling fixed-width table. `overflow-x-auto`
+       *  lets the table scroll rather than wrapping cells into
+       *  single-word columns. `table-fixed` + explicit widths give the
+       *  browser stable layout targets. */}
+      <div className="hidden md:block overflow-x-auto rounded-md border">
         <Table className="table-fixed text-xs">
           <TableHeader>
             <TableRow>
@@ -315,6 +314,63 @@ export function AuditLogPage() {
             )}
           </TableBody>
         </Table>
+      </div>
+
+      {/* below md: stacked event cards */}
+      <div className="md:hidden rounded-md border divide-y divide-border">
+        {rows.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">
+            No audit events match these filters yet.
+          </p>
+        ) : (
+          rows.map((row) => {
+            const stamp = formatTimestamp(row.occurredAt)
+            return (
+              <div key={row.id} className="p-3 space-y-2">
+                {/* Primary: event type + outcome */}
+                <div className="flex items-start justify-between gap-2">
+                  <span
+                    className="font-mono text-xs truncate text-foreground"
+                    title={row.eventType}
+                  >
+                    {row.eventType}
+                  </span>
+                  <OutcomeBadge outcome={row.eventOutcome} />
+                </div>
+                {/* Secondary fields */}
+                <div className="space-y-1 text-xs text-muted-foreground">
+                  <div className="flex gap-2">
+                    <span className="w-12 shrink-0 font-medium text-foreground/60">When</span>
+                    <span title={stamp.full}>
+                      {stamp.date} {stamp.time}
+                    </span>
+                  </div>
+                  {row.actorEmail && (
+                    <div className="flex gap-2">
+                      <span className="w-12 shrink-0 font-medium text-foreground/60">Actor</span>
+                      <span className="truncate">{row.actorEmail}</span>
+                    </div>
+                  )}
+                  {row.targetType && (
+                    <div className="flex gap-2">
+                      <span className="w-12 shrink-0 font-medium text-foreground/60">Target</span>
+                      <div className="min-w-0">
+                        <span className="uppercase tracking-wide text-[10px]">
+                          {row.targetType}
+                        </span>
+                        {row.targetId && (
+                          <p className="font-mono text-[11px] truncate" title={row.targetId}>
+                            {row.targetId}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          })
+        )}
       </div>
 
       {data.hasMore ? (
