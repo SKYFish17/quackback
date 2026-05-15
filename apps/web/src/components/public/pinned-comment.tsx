@@ -38,6 +38,7 @@ export function PinnedComment({ comment, workspaceName }: PinnedCommentProps) {
           </div>
           <CommentContent
             content={comment.content}
+            contentJson={comment.contentJson ?? null}
             className="text-sm text-foreground/90 leading-relaxed"
           />
         </div>
