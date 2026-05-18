@@ -163,34 +163,41 @@ function GenericVerifyPage({
   callbackURL: string | undefined
   errorCallbackURL: string | undefined
 }) {
-  // Build the verify URL once; both the auto-redirect effect and the
-  // fallback button hit it.
-  const verifyHref = (() => {
-    const u = new URL('/api/auth/magic-link/verify', window.location.origin)
-    u.searchParams.set('token', token)
-    if (callbackURL) u.searchParams.set('callbackURL', callbackURL)
-    if (errorCallbackURL) u.searchParams.set('errorCallbackURL', errorCallbackURL)
-    return u.toString()
-  })()
-
   // Auto-trigger the verify after a short delay. The delay matters
   // for two things:
   //   - Email-prefetch defense: Outlook Safe Links / Slack unfurl
   //     don't execute JS, so a JS-driven redirect still blocks the
-  //     non-browser GETs that would burn the token before the
-  //     human clicks. A purely server-side auto-verify would NOT
-  //     be safe.
+  //     non-browser GETs that would burn the token before the human
+  //     clicks. A purely server-side auto-verify would NOT be safe.
   //   - Reassurance: the customer sees "Signing you in..." for ~600ms
   //     instead of an unexplained jump, so a slow magic-link redirect
   //     doesn't feel like a broken page.
-  const [signingIn, setSigningIn] = useState(false)
+  //
+  // URL construction lives inside the effect because `window` is
+  // undefined during SSR; building it at render time would crash the
+  // page before it could ever ship. The fallback <a> is rendered
+  // with a relative href that works without JS at all.
   useEffect(() => {
-    setSigningIn(true)
+    const u = new URL('/api/auth/magic-link/verify', window.location.origin)
+    u.searchParams.set('token', token)
+    if (callbackURL) u.searchParams.set('callbackURL', callbackURL)
+    if (errorCallbackURL) u.searchParams.set('errorCallbackURL', errorCallbackURL)
+    const verifyHref = u.toString()
     const t = window.setTimeout(() => {
       window.location.href = verifyHref
     }, 600)
     return () => window.clearTimeout(t)
-  }, [verifyHref])
+  }, [token, callbackURL, errorCallbackURL])
+
+  // Fallback href for the manual-continue affordance. Identical
+  // shape to what the effect builds, just constructed without
+  // window so SSR is happy. Relative URLs work in both contexts.
+  const fallbackHref = (() => {
+    const params = new URLSearchParams({ token })
+    if (callbackURL) params.set('callbackURL', callbackURL)
+    if (errorCallbackURL) params.set('errorCallbackURL', errorCallbackURL)
+    return `/api/auth/magic-link/verify?${params.toString()}`
+  })()
 
   return (
     <PageShell>
@@ -203,8 +210,8 @@ function GenericVerifyPage({
         {/* Fallback for users who landed here with JS disabled or saw
             the auto-redirect blocked. Stays visible the whole time
             so a stalled redirect has a manual way out. */}
-        <a href={verifyHref} className="mt-6 inline-block">
-          <Button variant="outline" className="h-11" disabled={signingIn === undefined}>
+        <a href={fallbackHref} className="mt-6 inline-block">
+          <Button variant="outline" className="h-11">
             Continue
           </Button>
         </a>
