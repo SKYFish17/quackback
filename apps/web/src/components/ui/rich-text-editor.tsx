@@ -218,16 +218,36 @@ function createEnterAsHardBreak() {
     name: 'enterAsHardBreak',
     addKeyboardShortcuts() {
       return {
-        Enter: () =>
-          this.editor.commands.first(({ commands }) => [
+        Enter: () => {
+          // When the emoji picker, slash menu, or mention popover is open,
+          // Enter belongs to the suggestion plugin. ProseMirror invokes keymap
+          // handlers (this one) before suggestion handleKeyDown, so returning
+          // false here lets the popover's onKeyDown pick the highlighted item
+          // instead of inserting a hardBreak under the popover.
+          if (hasActiveSuggestion(this.editor)) return false
+          return this.editor.commands.first(({ commands }) => [
             () => commands.newlineInCode(),
             () => commands.splitListItem('listItem'),
             () => commands.splitListItem('taskItem'),
             () => commands.setHardBreak(),
-          ]),
+          ])
+        },
       }
     },
   })
+}
+
+// Suggestion-style plugins (emoji picker, slash menu, mention) keep
+// `{ active: boolean, range, query, ... }` on their plugin state. We probe
+// every plugin generically rather than importing each PluginKey because
+// MentionExtension constructs an anonymous key per instance and isn't reachable
+// from here. Non-object states are skipped — those are unrelated plugins.
+export function hasActiveSuggestion(editor: Pick<Editor, 'state'>): boolean {
+  for (const plugin of editor.state.plugins) {
+    const state = plugin.getState(editor.state) as { active?: unknown } | null | undefined
+    if (state && typeof state === 'object' && state.active === true) return true
+  }
+  return false
 }
 
 // ============================================================================
