@@ -364,7 +364,7 @@
   "portal.auth.otp.resendEmail": "Отправить повторно",
   "portal.auth.oauth.popupBlocked": "Всплывающее окно заблокировано. Разрешите всплывающие окна для этого сайта.",
   "portal.auth.oauth.signingIn": "Вход...",
-  "portal.auth.oauth.continueWith": "Продолжить с {name}",
+  "portal.auth.oauth.continueWith": "Войти через {name}",
   "portal.auth.oauth.signInWith": "Войти через {label}",
   "portal.auth.oauth.signUpWith": "Зарегистрироваться через {label}",
   "portal.auth.forgot.description": "Введите email, и мы отправим вам ссылку для сброса пароля.",
