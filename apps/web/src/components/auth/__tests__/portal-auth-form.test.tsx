@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
+import { IntlProvider } from 'react-intl'
 
 vi.mock('@/lib/client/auth-client', () => ({
   authClient: {
@@ -92,6 +93,10 @@ vi.mock('@/components/ui/input-otp', () => ({
 import { PortalAuthForm } from '../portal-auth-form'
 import { authClient } from '@/lib/client/auth-client'
 
+function renderWithIntl(ui: JSX.Element) {
+  return render(<IntlProvider locale="en" defaultLocale="en">{ui}</IntlProvider>)
+}
+
 const signInEmailOtpMock = authClient.signIn.emailOtp as ReturnType<typeof vi.fn>
 const signInOauth2Mock = authClient.signIn.oauth2 as ReturnType<typeof vi.fn>
 
@@ -128,7 +133,7 @@ describe('PortalAuthForm — Stage 1 email entry', () => {
   afterEach(() => cleanup())
 
   it('renders email field and Continue button on Stage 1', () => {
-    render(<PortalAuthForm authConfig={{ password: true, magicLink: false }} />)
+    renderWithIntl(<PortalAuthForm authConfig={{ password: true, magicLink: false }} />)
     expect(screen.getByLabelText(/email/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /continue/i })).toBeInTheDocument()
     // No password field at Stage 1
@@ -140,13 +145,13 @@ describe('PortalAuthForm — Stage 1 email entry', () => {
     vi.mocked(oauth.getEnabledOAuthProviders).mockReturnValueOnce([
       { id: 'google', name: 'Google', type: 'social' },
     ])
-    render(<PortalAuthForm authConfig={{ password: true, magicLink: false, google: true }} />)
+    renderWithIntl(<PortalAuthForm authConfig={{ password: true, magicLink: false, google: true }} />)
     expect(screen.getByTestId('oauth-buttons')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /continue with google/i })).toBeInTheDocument()
   })
 
   it('rejects empty-email submit without calling lookup', async () => {
-    render(<PortalAuthForm authConfig={{ password: true, magicLink: false }} />)
+    renderWithIntl(<PortalAuthForm authConfig={{ password: true, magicLink: false }} />)
     fireEvent.click(screen.getByRole('button', { name: /continue/i }))
     // HTML5 required keeps lookup from firing; nothing else to assert
     expect(lookupMock).not.toHaveBeenCalled()
@@ -167,7 +172,7 @@ describe('PortalAuthForm — Stage 1 → Stage 2 dispatch', () => {
       authConfig: { password: true, magicLink: false },
       ssoEnabled: false,
     })
-    render(
+    renderWithIntl(
       <PortalAuthForm authConfig={{ password: true, magicLink: false }} workspaceName="Acme" />
     )
     fireEvent.change(screen.getByLabelText(/email/i), {
@@ -190,7 +195,7 @@ describe('PortalAuthForm — Stage 1 → Stage 2 dispatch', () => {
   it('redirects to SSO when the lookup returns sso-redirect', async () => {
     lookupMock.mockResolvedValue({ kind: 'sso-redirect' })
     signInOauth2Mock.mockResolvedValue({ data: { url: 'https://idp.example/' }, error: null })
-    render(<PortalAuthForm authConfig={{ password: true, magicLink: false }} />)
+    renderWithIntl(<PortalAuthForm authConfig={{ password: true, magicLink: false }} />)
     fireEvent.change(screen.getByLabelText(/email/i), {
       target: { value: 'jane@acme.com' },
     })
@@ -214,7 +219,7 @@ describe('PortalAuthForm — Stage 1 → Stage 2 dispatch', () => {
       kind: 'sso-default',
       authConfig: { password: true, magicLink: false },
     })
-    render(
+    renderWithIntl(
       <PortalAuthForm authConfig={{ password: true, magicLink: false }} workspaceName="Acme" />
     )
     fireEvent.change(screen.getByLabelText(/email/i), {
@@ -229,7 +234,7 @@ describe('PortalAuthForm — Stage 1 → Stage 2 dispatch', () => {
 
   it('shows sso-unavailable copy when the lookup returns sso-unavailable', async () => {
     lookupMock.mockResolvedValue({ kind: 'sso-unavailable', reason: 'not-registered' })
-    render(<PortalAuthForm authConfig={{ password: true, magicLink: false }} />)
+    renderWithIntl(<PortalAuthForm authConfig={{ password: true, magicLink: false }} />)
     fireEvent.change(screen.getByLabelText(/email/i), {
       target: { value: 'jane@acme.com' },
     })
@@ -244,7 +249,7 @@ describe('PortalAuthForm — Stage 1 → Stage 2 dispatch', () => {
       authConfig: { password: true, magicLink: false },
       ssoEnabled: false,
     })
-    render(
+    renderWithIntl(
       <PortalAuthForm
         mode="signup"
         authConfig={{ password: true, magicLink: false }}
@@ -268,7 +273,7 @@ describe('PortalAuthForm — Stage 1 → Stage 2 dispatch', () => {
       authConfig: { password: true, magicLink: false },
       ssoEnabled: false,
     })
-    render(<PortalAuthForm authConfig={{ password: true, magicLink: false }} />)
+    renderWithIntl(<PortalAuthForm authConfig={{ password: true, magicLink: false }} />)
     fireEvent.change(screen.getByLabelText(/email/i), {
       target: { value: 'user@gmail.com' },
     })
@@ -299,7 +304,7 @@ describe('PortalAuthForm — initialEmail skips Stage 1', () => {
   const adminAuthConfig = { magicLink: true, password: false }
 
   it('lands on the magic-link send step when initialEmail is supplied', () => {
-    render(
+    renderWithIntl(
       <PortalAuthForm
         authConfig={adminAuthConfig}
         callbackUrl="/admin/feedback"
@@ -312,7 +317,7 @@ describe('PortalAuthForm — initialEmail skips Stage 1', () => {
   })
 
   it('submits the magic-link request and flips to the code step', async () => {
-    render(
+    renderWithIntl(
       <PortalAuthForm
         authConfig={adminAuthConfig}
         callbackUrl="/admin/feedback"
@@ -336,7 +341,7 @@ describe('PortalAuthForm — initialEmail skips Stage 1', () => {
   })
 
   it('auto-submits when 6 digits are entered (no manual button click needed)', async () => {
-    render(
+    renderWithIntl(
       <PortalAuthForm
         authConfig={adminAuthConfig}
         callbackUrl="/admin/feedback"
@@ -357,7 +362,7 @@ describe('PortalAuthForm — initialEmail skips Stage 1', () => {
 
   it('surfaces the server error message when portal-signin fails', async () => {
     fetchMock.mockResolvedValueOnce(errorResponse(500, { error: 'Email not configured' }))
-    render(
+    renderWithIntl(
       <PortalAuthForm
         authConfig={adminAuthConfig}
         callbackUrl="/admin/feedback"
@@ -375,7 +380,7 @@ describe('PortalAuthForm — initialEmail skips Stage 1', () => {
       data: null,
       error: { message: 'Invalid or expired code' },
     })
-    render(
+    renderWithIntl(
       <PortalAuthForm
         authConfig={adminAuthConfig}
         callbackUrl="/admin/feedback"
@@ -398,7 +403,7 @@ describe('PortalAuthForm — methods step variants', () => {
   afterEach(() => cleanup())
 
   it('does not render the magic-link cross-link when magicLink is off', () => {
-    render(
+    renderWithIntl(
       <PortalAuthForm
         authConfig={{ password: true, magicLink: false }}
         initialEmail="user@example.com"
