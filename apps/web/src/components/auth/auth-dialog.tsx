@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useIntl, FormattedMessage } from 'react-intl'
 import {
   Dialog,
   DialogContent,
@@ -33,6 +34,7 @@ interface FormContext {
  * adapts to the form's current step (e.g. flips to "Check your email"
  * after the user submits their email). */
 export function AuthDialog({ authConfig, workspaceName }: AuthDialogProps) {
+  const intl = useIntl()
   const { isOpen, mode, closeAuthPopover, setMode, onAuthSuccess } = useAuthPopover()
   const [formContext, setFormContext] = useState<FormContext>({ step: 'credentials', email: '' })
 
@@ -42,7 +44,7 @@ export function AuthDialog({ authConfig, workspaceName }: AuthDialogProps) {
     enabled: isOpen,
   })
 
-  const { title, description } = headerForStep(mode, formContext)
+  const { title, description } = headerForStep(intl, mode, formContext)
 
   return (
     <Dialog
@@ -73,36 +75,45 @@ export function AuthDialog({ authConfig, workspaceName }: AuthDialogProps) {
 }
 
 function headerForStep(
+  intl: ReturnType<typeof useIntl>,
   mode: 'login' | 'signup',
   ctx: FormContext
 ): { title: string; description: React.ReactNode } {
   if (ctx.step === 'code') {
     return {
-      title: mode === 'signup' ? 'Almost there' : 'Check your email',
+      title: mode === 'signup'
+        ? intl.formatMessage({ id: 'portal.auth.dialog.almostThere', defaultMessage: 'Almost there' })
+        : intl.formatMessage({ id: 'portal.auth.checkEmail', defaultMessage: 'Check your email' }),
       description: (
-        <>
-          We sent a 6-digit code to <strong className="text-foreground">{ctx.email}</strong>.
-        </>
+        <FormattedMessage
+          id="portal.auth.sentCodeTo"
+          defaultMessage="We sent a 6-digit code to <strong>{email}</strong>."
+          values={{
+            email: ctx.email,
+            strong: (chunks) => <strong className="text-foreground">{chunks}</strong>,
+          }}
+        />
       ),
     }
   }
   if (ctx.step === 'forgot') {
     return {
-      title: 'Reset your password',
-      description: "Enter your email and we'll send you a reset link.",
+      title: intl.formatMessage({ id: 'portal.auth.resetPassword', defaultMessage: 'Reset your password' }),
+      description: intl.formatMessage({ id: 'portal.auth.dialog.resetDescription', defaultMessage: "Enter your email and we'll send you a reset link." }),
     }
   }
   if (ctx.step === 'reset') {
     return {
-      title: 'Check your email',
-      description: 'We sent you a password reset link.',
+      title: intl.formatMessage({ id: 'portal.auth.checkEmail', defaultMessage: 'Check your email' }),
+      description: intl.formatMessage({ id: 'portal.auth.dialog.sentResetLink', defaultMessage: 'We sent you a password reset link.' }),
     }
   }
   return {
-    title: mode === 'login' ? 'Welcome back' : 'Create an account',
-    description:
-      mode === 'login'
-        ? 'Sign in to vote and comment on feedback.'
-        : 'Sign up to vote and comment on feedback.',
+    title: mode === 'login'
+      ? intl.formatMessage({ id: 'portal.auth.welcomeBack', defaultMessage: 'Welcome back' })
+      : intl.formatMessage({ id: 'portal.auth.createAccount', defaultMessage: 'Create an account' }),
+    description: mode === 'login'
+      ? intl.formatMessage({ id: 'portal.auth.dialog.signInToVote', defaultMessage: 'Sign in to vote and comment on feedback.' })
+      : intl.formatMessage({ id: 'portal.auth.dialog.signUpToVote', defaultMessage: 'Sign up to vote and comment on feedback.' }),
   }
 }

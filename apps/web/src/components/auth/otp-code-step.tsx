@@ -1,3 +1,4 @@
+import { useIntl, FormattedMessage } from 'react-intl'
 import { Button } from '@/components/ui/button'
 import { FormError } from '@/components/shared/form-error'
 import { ArrowPathIcon } from '@heroicons/react/24/solid'
@@ -38,6 +39,8 @@ export function OtpCodeStep({
   resendCooldown,
   showInnerHeader = false,
 }: OtpCodeStepProps) {
+  const intl = useIntl()
+
   return (
     <form
       onSubmit={onSubmit}
@@ -51,10 +54,20 @@ export function OtpCodeStep({
     >
       {showInnerHeader && (
         <div className="space-y-1.5 text-center">
-          <h2 className="text-lg font-semibold">Check your email</h2>
+          <h2 className="text-lg font-semibold">
+            <FormattedMessage id="portal.auth.checkEmail" defaultMessage="Check your email" />
+          </h2>
           <p className="text-sm text-muted-foreground">
-            We sent a 6-digit code to{' '}
-            <span className="font-medium text-foreground break-all">{email}</span>.
+            <FormattedMessage
+              id="portal.auth.sentCodeTo"
+              defaultMessage="We sent a 6-digit code to <strong>{email}</strong>."
+              values={{
+                email,
+                strong: (chunks) => (
+                  <span className="font-medium text-foreground break-all">{chunks}</span>
+                ),
+              }}
+            />
           </p>
         </div>
       )}
@@ -88,23 +101,25 @@ export function OtpCodeStep({
         {loading ? (
           <>
             <ArrowPathIcon className="mr-2 h-4 w-4 animate-spin" />
-            Verifying…
+            <FormattedMessage id="portal.auth.otp.verifying" defaultMessage="Verifying…" />
           </>
         ) : (
-          'Verify code'
+          <FormattedMessage id="portal.auth.otp.verifyCode" defaultMessage="Verify code" />
         )}
       </Button>
 
       <div className="space-y-1.5 text-center">
         <p className="text-xs text-muted-foreground">
-          The sign-in link in your email also works.{' '}
+          <FormattedMessage id="portal.auth.otp.emailLinkAlsoWorks" defaultMessage="The sign-in link in your email also works." />{' '}
           <button
             type="button"
             onClick={onResend}
             disabled={resendCooldown > 0 || loading}
             className="rounded-sm text-foreground underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground/70 disabled:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend email'}
+            {resendCooldown > 0
+              ? intl.formatMessage({ id: 'portal.auth.otp.resendIn', defaultMessage: 'Resend in {seconds}s' }, { seconds: resendCooldown })
+              : intl.formatMessage({ id: 'portal.auth.otp.resendEmail', defaultMessage: 'Resend email' })}
           </button>
         </p>
         <button
@@ -112,7 +127,7 @@ export function OtpCodeStep({
           onClick={onBack}
           className="rounded-sm text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          Use a different email
+          <FormattedMessage id="portal.auth.useDifferentEmail" defaultMessage="Use a different email" />
         </button>
       </div>
     </form>

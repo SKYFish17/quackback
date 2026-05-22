@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useIntl } from 'react-intl'
 import { Button } from '@/components/ui/button'
 import { AUTH_PROVIDER_ICON_MAP } from '@/components/icons/social-provider-icons'
 import { AUTH_PROVIDERS } from '@/lib/shared/auth-providers'
@@ -53,6 +54,7 @@ interface OAuthButtonsProps {
  * All providers use popup windows for authentication.
  */
 export function OAuthButtons({ callbackUrl = '/', providers, onSuccess }: OAuthButtonsProps) {
+  const intl = useIntl()
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null)
   const [popupBlocked, setPopupBlocked] = useState(false)
   const { trackPopup, hasPopup, focusPopup, clearPopup } = usePopupTracker({
@@ -114,7 +116,7 @@ export function OAuthButtons({ callbackUrl = '/', providers, onSuccess }: OAuthB
     <div className="space-y-3">
       {popupBlocked && (
         <p className="text-sm text-destructive text-center">
-          Popup blocked. Please allow popups for this site.
+          {intl.formatMessage({ id: 'portal.auth.oauth.popupBlocked', defaultMessage: 'Popup blocked. Please allow popups for this site.' })}
         </p>
       )}
       {providers.map((provider) => {
@@ -129,7 +131,9 @@ export function OAuthButtons({ callbackUrl = '/', providers, onSuccess }: OAuthB
             disabled={loadingProvider !== null}
           >
             {IconComponent && <IconComponent className="mr-2 h-4 w-4" />}
-            {loadingProvider === provider.id ? 'Signing in...' : `Continue with ${provider.name}`}
+            {loadingProvider === provider.id
+              ? intl.formatMessage({ id: 'portal.auth.oauth.signingIn', defaultMessage: 'Signing in...' })
+              : intl.formatMessage({ id: 'portal.auth.oauth.continueWith', defaultMessage: 'Continue with {name}' }, { name: provider.name })}
           </Button>
         )
       })}
