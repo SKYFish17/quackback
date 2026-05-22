@@ -25,10 +25,17 @@ import {
   ShieldCheckIcon,
   SunIcon,
 } from '@heroicons/react/24/solid'
-import { useAuthPopoverSafe } from '@/components/auth/auth-popover-context'
-import { hasAnyPortalAuthMethod } from '@/components/auth/oauth-buttons'
+import {
+  getEnabledOAuthProviders,
+  getOAuthRedirectUrl,
+  type OAuthProviderEntry,
+} from '@/components/auth/oauth-buttons'
 import { useQueryClient } from '@tanstack/react-query'
-import { useAuthBroadcast } from '@/lib/client/hooks/use-auth-broadcast'
+import {
+  useAuthBroadcast,
+  openAuthPopup,
+  usePopupTracker,
+} from '@/lib/client/hooks/use-auth-broadcast'
 import { NotificationBell } from '@/components/notifications'
 
 interface PortalHeaderProps {
@@ -64,15 +71,17 @@ export function PortalHeader({
   const onHelpPages = pathname === '/hc' || pathname.startsWith('/hc/')
   const navItems = buildNavItems({ helpCenterEnabled })
 
-  // Hide Log in / Sign up when no portal sign-in surface is usable.
-  // Team members can still reach /admin/login directly.
-  const portalAuthEnabled = hasAnyPortalAuthMethod(settings?.publicPortalConfig?.oauth ?? {}, {
-    ssoEnabled: registeredAuthProviders?.includes('sso') ?? false,
-    hasVerifiedDomain: (settings?.verifiedDomains ?? []).some((d) => d.verifiedAt !== null),
+  const oauthProviders = getEnabledOAuthProviders(
+    settings?.publicPortalConfig?.oauth ?? {},
+    settings?.publicPortalConfig?.customProviderNames ?? {}
+  )
+  const primaryProvider: OAuthProviderEntry | null = oauthProviders[0] ?? null
+
+  const [ssoLoading, setSsoLoading] = useState(false)
+  const { trackPopup, hasPopup, focusPopup, clearPopup } = usePopupTracker({
+    onPopupClosed: () => setSsoLoading(false),
   })
 
-  const authPopover = useAuthPopoverSafe()
-  const openAuthPopover = authPopover?.openAuthPopover
   const { theme, setTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
 
@@ -84,12 +93,30 @@ export function PortalHeader({
   // Listen for auth success to refetch session and role via router invalidation
   useAuthBroadcast({
     onSuccess: () => {
-      // Invalidate user-scoped queries so reaction highlights and vote data refresh
+      clearPopup()
+      setSsoLoading(false)
       queryClient.invalidateQueries({ queryKey: ['portal', 'post'] })
       queryClient.invalidateQueries({ queryKey: ['votedPosts'] })
-      router.invalidate() // Refetch loaders (includes session and userRole)
+      router.invalidate()
     },
   })
+
+  const handleSsoLogin = async () => {
+    if (!primaryProvider) return
+    if (hasPopup()) { focusPopup(); return }
+    setSsoLoading(true)
+    const popup = openAuthPopup('about:blank')
+    if (!popup) { setSsoLoading(false); return }
+    trackPopup(popup)
+    try {
+      const url = await getOAuthRedirectUrl(primaryProvider, '/')
+      if (url) popup.location.href = url
+      else { popup.close(); setSsoLoading(false) }
+    } catch {
+      popup.close()
+      setSsoLoading(false)
+    }
+  }
 
   // Get user info from session (anonymous sessions don't count as logged in)
   const user = session?.user
@@ -248,16 +275,22 @@ export function PortalHeader({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-      ) : openAuthPopover && portalAuthEnabled ? (
-        // Anonymous user with auth popover available - show login/signup buttons
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={() => openAuthPopover({ mode: 'login' })}>
-            <FormattedMessage id="portal.header.auth.logIn" defaultMessage="Log in" />
-          </Button>
-          <Button size="sm" onClick={() => openAuthPopover({ mode: 'signup' })}>
-            <FormattedMessage id="portal.header.auth.signUp" defaultMessage="Sign up" />
-          </Button>
-        </div>
+      ) : primaryProvider ? (
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={handleSsoLogin}
+          disabled={ssoLoading}
+          className="ms-1"
+        >
+          <ShieldCheckIcon className="me-2 h-4 w-4" />
+          {ssoLoading
+            ? intl.formatMessage({ id: 'portal.auth.oauth.signingIn', defaultMessage: 'Signing in...' })
+            : intl.formatMessage(
+                { id: 'portal.auth.oauth.continueWith', defaultMessage: 'Continue with {name}' },
+                { name: primaryProvider.name }
+              )}
+        </Button>
       ) : null}
     </div>
   )
