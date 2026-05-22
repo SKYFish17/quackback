@@ -313,7 +313,6 @@ export function FeedbackContainer({
           boards={boards}
           currentBoard={activeBoard}
           onBoardChange={handleBoardChange}
-          workspaceSlug={workspaceSlug}
         />
       </div>
     </div>

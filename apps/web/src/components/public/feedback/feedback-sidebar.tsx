@@ -7,14 +7,12 @@ interface FeedbackSidebarProps {
   boards: BoardWithStats[]
   currentBoard?: string
   onBoardChange: (board: string | undefined) => void
-  workspaceSlug?: string
 }
 
 export function FeedbackSidebar({
   boards,
   currentBoard,
   onBoardChange,
-  workspaceSlug,
 }: FeedbackSidebarProps) {
   return (
     <aside className="w-64 shrink-0 hidden lg:block">
