@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
 import { IntlProvider } from 'react-intl'
+import type { ReactNode } from 'react'
 
 vi.mock('@/lib/client/auth-client', () => ({
   authClient: {
@@ -93,7 +94,7 @@ vi.mock('@/components/ui/input-otp', () => ({
 import { PortalAuthForm } from '../portal-auth-form'
 import { authClient } from '@/lib/client/auth-client'
 
-function renderWithIntl(ui: JSX.Element) {
+function renderWithIntl(ui: ReactNode) {
   return render(<IntlProvider locale="en" defaultLocale="en">{ui}</IntlProvider>)
 }
 
