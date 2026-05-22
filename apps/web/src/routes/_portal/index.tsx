@@ -170,7 +170,6 @@ function PublicPortalPage() {
     <div className="mx-auto max-w-6xl w-full px-4 sm:px-6 py-6">
       <FeedbackContainer
         workspaceName={org.name}
-        workspaceSlug={org.slug}
         boards={portalData.boards}
         posts={portalData.posts.items}
         statuses={portalData.statuses}

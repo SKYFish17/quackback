@@ -27,7 +27,6 @@ import { cn } from '@/lib/shared/utils'
 
 interface FeedbackContainerProps {
   workspaceName: string
-  workspaceSlug: string
   boards: BoardWithStats[]
   posts: PublicPostListItem[]
   statuses: PostStatusEntity[]
@@ -48,7 +47,6 @@ interface FeedbackContainerProps {
 
 export function FeedbackContainer({
   workspaceName,
-  workspaceSlug,
   boards,
   posts: initialPosts,
   statuses,
