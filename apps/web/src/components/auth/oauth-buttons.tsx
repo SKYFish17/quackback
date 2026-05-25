@@ -94,7 +94,7 @@ export function OAuthButtons({ callbackUrl = '/', providers, onSuccess }: OAuthB
     trackPopup(popup)
 
     try {
-      const url = await getOAuthRedirectUrl(provider, callbackUrl)
+      const url = await getOAuthRedirectUrl(provider, '/auth/auth-complete')
       if (url) {
         popup.location.href = url
       } else {
