@@ -125,7 +125,6 @@ export function PortalAuthFormInline({
   const intl = useIntl()
   const passwordEnabled = authConfig?.oauth?.password ?? true
   const magicLinkEnabled = authConfig?.oauth?.magicLink ?? false
-  const openSignup = authConfig?.openSignup
   const methodsDefaultStep: AuthFormStep =
     !passwordEnabled && magicLinkEnabled ? 'email' : 'credentials'
 
