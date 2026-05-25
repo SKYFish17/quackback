@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { useIntl, FormattedMessage } from 'react-intl'
-import { useServerFn } from '@tanstack/react-start'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { FormError } from '@/components/shared/form-error'
@@ -21,11 +20,7 @@ import {
 import { openAuthPopup, usePopupTracker } from '@/lib/client/hooks/use-auth-broadcast'
 import { authClient } from '@/lib/client/auth-client'
 import { stashTwoFactorCallbackUrl } from '@/lib/server/auth/client'
-import {
-  lookupAuthMethodsFn,
-  SSO_UNAVAILABLE_MESSAGE,
-  type LookupAuthMethodsResult,
-} from '@/lib/server/functions/auth'
+import { SSO_UNAVAILABLE_MESSAGE } from '@/lib/server/functions/auth'
 import { OtpCodeStep } from './otp-code-step'
 import { useEmailSignin } from './use-email-signin'
 import type { AuthFormStep } from './email-signin-types'
@@ -159,8 +154,6 @@ export function PortalAuthFormInline({
   const [loadingInvitation, setLoadingInvitation] = useState(!!invitationId)
   const [popupBlocked, setPopupBlocked] = useState(false)
 
-  const lookupAuthMethods = useServerFn(lookupAuthMethodsFn)
-
   const emailSignin = useEmailSignin({
     callbackUrl: '/',
     onSuccess: async () => {
@@ -220,47 +213,6 @@ export function PortalAuthFormInline({
     const step: AuthFormStep = view.stage === 'methods-step' ? view.step : 'credentials'
     onContextChange?.({ step, email })
   }, [view, email, onContextChange])
-
-  // --- Stage 1 → Stage 2 transition ---
-  const continueFromEmail = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError('')
-    const trimmed = email.trim()
-    if (!trimmed) {
-      setError(intl.formatMessage({ id: 'portal.auth.error.emailRequired', defaultMessage: 'Email is required' }))
-      return
-    }
-
-    setLoadingAction('continue')
-    try {
-      const result: LookupAuthMethodsResult = await lookupAuthMethods({
-        data: { email: trimmed, surface: 'portal' },
-      })
-      if (result.kind === 'sso-redirect') {
-        setView({ stage: 'sso-redirecting' })
-        setLoadingAction('sso')
-        await authClient.signIn.oauth2({ providerId: 'sso', callbackURL: '/' })
-        return
-      }
-      if (result.kind === 'sso-default') {
-        setView({ stage: 'sso-default' })
-        return
-      }
-      if (result.kind === 'sso-unavailable') {
-        setView({ stage: 'sso-unavailable' })
-        return
-      }
-      if (mode === 'signup' && openSignup === false) {
-        setView({ stage: 'closed-signup' })
-        return
-      }
-      setView({ stage: 'methods-step', step: methodsDefaultStep })
-    } catch (err) {
-      setError((err as Error).message || intl.formatMessage({ id: 'portal.auth.error.generic', defaultMessage: 'Something went wrong. Please try again.' }))
-    } finally {
-      setLoadingAction((prev) => (prev === 'continue' ? null : prev))
-    }
-  }
 
   // --- Password auth handler ---
   const handlePasswordSubmit = async (e: React.FormEvent) => {
@@ -490,96 +442,22 @@ export function PortalAuthFormInline({
   // ============================================================
   if (view.stage === 'email') {
     return (
-      <div className="space-y-6">
-        {showOAuth && (
-          <>
-            <div className="space-y-3">
-              {enabledProviders.map((provider) => {
-                const IconComp = AUTH_PROVIDER_ICON_MAP[provider.id]
-                return (
-                  <OAuthButton
-                    key={provider.id}
-                    icon={IconComp ? <IconComp className="h-5 w-5" /> : null}
-                    label={provider.name}
-                    mode={mode}
-                    loading={loadingAction === provider.id}
-                    disabled={loadingAction !== null}
-                    onClick={() => initiateOAuth(provider)}
-                  />
-                )
-              })}
-            </div>
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-border" />
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="bg-background px-2 text-muted-foreground">
-                  <FormattedMessage id="portal.auth.or" defaultMessage="or" />
-                </span>
-              </div>
-            </div>
-          </>
-        )}
-
-        <form onSubmit={continueFromEmail} className="space-y-4">
-          {error && <FormError message={error} />}
-          <div className="space-y-2">
-            <label htmlFor="inline-email" className="text-sm font-medium">
-              <FormattedMessage id="portal.auth.emailLabel" defaultMessage="Email" />
-            </label>
-            <Input
-              id="inline-email"
-              type="email"
-              autoComplete="email"
-              autoFocus
-              placeholder={intl.formatMessage({ id: 'portal.auth.emailPlaceholder', defaultMessage: 'you@example.com' })}
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+      <div className="space-y-3">
+        {showOAuth && enabledProviders.map((provider) => {
+          const IconComp = AUTH_PROVIDER_ICON_MAP[provider.id]
+          return (
+            <OAuthButton
+              key={provider.id}
+              icon={IconComp ? <IconComp className="h-5 w-5" /> : null}
+              label={provider.name}
+              mode={mode}
+              loading={loadingAction === provider.id}
               disabled={loadingAction !== null}
-              required
+              onClick={() => initiateOAuth(provider)}
             />
-          </div>
-          <Button
-            type="submit"
-            disabled={loadingAction !== null || !email.trim()}
-            className="w-full"
-          >
-            {loadingAction === 'continue' ? (
-              <ArrowPathIcon className="h-4 w-4 animate-spin" />
-            ) : (
-              <FormattedMessage id="portal.auth.continue" defaultMessage="Continue →" />
-            )}
-          </Button>
-        </form>
-
-        {onModeSwitch && (
-          <p className="text-center text-sm text-muted-foreground">
-            {mode === 'login' ? (
-              <>
-                <FormattedMessage id="portal.auth.newHere" defaultMessage="New here?" />{' '}
-                <button
-                  type="button"
-                  onClick={() => onModeSwitch('signup')}
-                  className="text-primary hover:underline font-medium"
-                >
-                  <FormattedMessage id="portal.auth.createAccount" defaultMessage="Create an account" />
-                </button>
-              </>
-            ) : (
-              <>
-                <FormattedMessage id="portal.auth.haveAccount" defaultMessage="Have an account?" />{' '}
-                <button
-                  type="button"
-                  onClick={() => onModeSwitch('login')}
-                  className="text-primary hover:underline font-medium"
-                >
-                  <FormattedMessage id="portal.auth.signIn" defaultMessage="Sign in" />
-                </button>
-              </>
-            )}
-          </p>
-        )}
+          )
+        })}
+        {error && <FormError message={error} />}
       </div>
     )
   }
