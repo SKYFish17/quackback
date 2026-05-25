@@ -88,7 +88,11 @@ function AdminLayout() {
 
   // For public routes (login, signup), render just the outlet without the admin layout
   if (!initialUserData) {
-    return <Outlet />
+    return (
+      <IntlProvider locale={DEFAULT_LOCALE} defaultLocale={DEFAULT_LOCALE}>
+        <Outlet />
+      </IntlProvider>
+    )
   }
 
   return (
