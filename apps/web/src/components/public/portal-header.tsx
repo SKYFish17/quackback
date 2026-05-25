@@ -109,7 +109,7 @@ export function PortalHeader({
     if (!popup) { setSsoLoading(false); return }
     trackPopup(popup)
     try {
-      const url = await getOAuthRedirectUrl(primaryProvider, '/')
+      const url = await getOAuthRedirectUrl(primaryProvider, '/auth/auth-complete')
       if (url) popup.location.href = url
       else { popup.close(); setSsoLoading(false) }
     } catch {
