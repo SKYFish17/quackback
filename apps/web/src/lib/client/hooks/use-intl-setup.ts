@@ -1,12 +1,18 @@
 import { useEffect, useState } from 'react'
 import { loadMessages, isRtlLocale, isRtlForced, type SupportedLocale } from '@/lib/shared/i18n'
+import enMessages from '../../../locales/en.json'
 
 /**
  * Shared hook that loads locale messages and sets `lang`/`dir` on <html>.
  * Used by both PortalIntlProvider and WidgetAuthProvider.
  */
 export function useIntlSetup(locale: SupportedLocale): Record<string, string> {
-  const [messages, setMessages] = useState<Record<string, string>>({})
+  // Initialize with English messages so the first render has all keys available.
+  // This prevents MISSING_TRANSLATION warnings and SSR hydration mismatches that
+  // would occur if we started with an empty map and loaded messages asynchronously.
+  const [messages, setMessages] = useState<Record<string, string>>(
+    enMessages as Record<string, string>
+  )
 
   useEffect(() => {
     let cancelled = false
