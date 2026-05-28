@@ -81,16 +81,21 @@ export function WidgetAuthProvider({
   const sessionReadyRef = useRef(false)
   const sessionSourceRef = useRef<SessionSource>(null)
 
-  // i18n locale state
-  const [locale, setLocale] = useState<SupportedLocale>(() => {
-    if (initialLocale) {
-      return normalizeLocale(initialLocale) ?? DEFAULT_LOCALE
+  // i18n locale state — initialize with DEFAULT_LOCALE when no explicit locale is
+  // provided so that SSR and the hydration pass start from the same value.
+  // Reading navigator.language in the initializer causes a mismatch because
+  // navigator is unavailable server-side; the effect below applies it post-hydration.
+  const [locale, setLocale] = useState<SupportedLocale>(
+    () => (initialLocale ? normalizeLocale(initialLocale) ?? DEFAULT_LOCALE : DEFAULT_LOCALE)
+  )
+
+  useEffect(() => {
+    if (!initialLocale) {
+      const normalized = normalizeLocale(navigator.language)
+      if (normalized) setLocale(normalized)
     }
-    if (typeof navigator !== 'undefined') {
-      return normalizeLocale(navigator.language) ?? DEFAULT_LOCALE
-    }
-    return DEFAULT_LOCALE
-  })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // run once on mount — applying browser locale post-hydration
   const messages = useIntlSetup(locale)
 
   const sessionVersionRef = useRef(0)

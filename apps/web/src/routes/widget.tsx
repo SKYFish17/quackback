@@ -17,6 +17,9 @@ export const getPortalSessionToken = createServerFn({ method: 'GET' }).handler(a
 })
 
 export const Route = createFileRoute('/widget')({
+  validateSearch: (search: Record<string, unknown>) => ({
+    locale: typeof search.locale === 'string' ? search.locale : null,
+  }),
   loader: async ({ context }) => {
     const { settings, session } = context
 
@@ -75,9 +78,8 @@ function WidgetLayout() {
   const { themeStyles, customCss, googleFontsUrl, portalUser, portalSessionToken, hmacRequired } =
     Route.useLoaderData()
 
-  // Read initial locale from URL param (?locale=fr)
-  const initialLocale =
-    typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('locale') : null
+  // Read initial locale from URL param (?locale=fr) via the router's SSR-safe search state.
+  const { locale: initialLocale } = Route.useSearch()
 
   return (
     <WidgetAuthProvider
