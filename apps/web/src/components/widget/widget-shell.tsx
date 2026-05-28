@@ -59,16 +59,24 @@ export function WidgetShell({
   ).length
   const showTabBar = enabledCount > 1
   const { user, closeWidget } = useWidgetAuth()
-  const isNative =
-    typeof window !== 'undefined' &&
-    new URLSearchParams(window.location.search).get('source') === 'native'
-  const showCloseExplicit =
-    typeof window !== 'undefined' &&
-    new URLSearchParams(window.location.search).get('showClose') === '1'
-  // The widget runs in a ~400px iframe on desktop, so window.innerWidth is
-  // unreliable for mobile detection. screen.width gives the actual device
-  // screen width regardless of iframe size. The parent SDK also sends
-  // 'quackback:mobile' on resize for the embedded case.
+
+  // Initialize to false so SSR and the hydration pass produce the same output;
+  // all three values are read from client-only APIs (window.location, window.screen)
+  // and are applied in a single post-hydration effect.
+  const [isNative, setIsNative] = useState(false)
+  const [showCloseExplicit, setShowCloseExplicit] = useState(false)
+  const [deviceIsMobile, setDeviceMobile] = useState(false)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    setIsNative(params.get('source') === 'native')
+    setShowCloseExplicit(params.get('showClose') === '1')
+    // The widget runs in a ~400px iframe on desktop, so window.innerWidth is
+    // unreliable for mobile detection. screen.width gives the actual device
+    // screen width regardless of iframe size. The parent SDK also sends
+    // 'quackback:mobile' on resize for the embedded case.
+    setDeviceMobile(window.screen.width < 640)
+  }, [])
+
   const [parentIsMobile, setParentIsMobile] = useState(false)
   useEffect(() => {
     function handleMobileMsg(event: MessageEvent) {
@@ -79,7 +87,6 @@ export function WidgetShell({
     window.addEventListener('message', handleMobileMsg)
     return () => window.removeEventListener('message', handleMobileMsg)
   }, [])
-  const deviceIsMobile = typeof window !== 'undefined' && window.screen.width < 640
   const showCloseButton = showCloseExplicit || isNative || parentIsMobile || deviceIsMobile
 
   // Global Escape key handler — close widget from anywhere
