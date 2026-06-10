@@ -22,7 +22,7 @@ import {
 } from '@/lib/server/db'
 import type { ChangelogId, PrincipalId, PostId } from '@quackback/ids'
 import { NotFoundError, ValidationError } from '@/lib/shared/errors'
-import { markdownToTiptapJson } from '@/lib/server/markdown-tiptap'
+import { markdownToTiptapJson, tiptapJsonToMarkdown } from '@/lib/server/markdown-tiptap'
 import { rehostExternalImages } from '@/lib/server/content/rehost-images'
 import { buildEventActor, dispatchChangelogPublished } from '@/lib/server/events/dispatch'
 import { scheduleDispatch, cancelScheduledDispatch } from '@/lib/server/events/scheduler'
@@ -74,11 +74,16 @@ export async function createChangelog(
     principalId: author.principalId,
   })
 
+  // Re-serialize markdown from contentJson so resizableImage nodes
+  // (which the client-side Markdown extension silently drops) become
+  // standard ![alt](src) in the stored markdown.
+  const normalizedContent = tiptapJsonToMarkdown(contentJson)
+
   const [entry] = await db
     .insert(changelogEntries)
     .values({
       title,
-      content,
+      content: normalizedContent,
       contentJson,
       principalId: author.principalId,
       publishedAt,
@@ -156,13 +161,13 @@ export async function updateChangelog(
   }
 
   if (input.title !== undefined) updateData.title = input.title.trim()
-  if (input.content !== undefined) updateData.content = input.content.trim()
   if (input.contentJson !== undefined || input.content !== undefined) {
     const parsed = input.contentJson ?? markdownToTiptapJson((input.content ?? '').trim())
     updateData.contentJson = await rehostExternalImages(parsed, {
       contentType: 'changelog',
       principalId: existing.principalId ?? undefined,
     })
+    updateData.content = tiptapJsonToMarkdown(updateData.contentJson as any)
   }
 
   // Handle publish state change

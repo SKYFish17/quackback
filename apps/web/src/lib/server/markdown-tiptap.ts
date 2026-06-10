@@ -69,7 +69,28 @@ export function markdownToTiptapJson(markdown: string): TiptapContent {
  * links/images in markdown. The contentJson preserves the full fidelity.
  */
 export function tiptapJsonToMarkdown(json: TiptapContent | JSONContent): string {
-  return manager.serialize(json as JSONContent)
+  return manager.serialize(normalizeImageNodes(json as JSONContent))
+}
+
+/**
+ * Recursively rename `resizableImage` nodes to `image` so the standard
+ * MarkdownManager serializer (which only knows `image`) can handle them.
+ * Extra attrs (width, data-keep-ratio) are stripped — markdown has no syntax
+ * for image dimensions; the lossless representation lives in contentJson.
+ */
+function normalizeImageNodes(node: JSONContent): JSONContent {
+  if (node.type === 'resizableImage') {
+    return {
+      type: 'image',
+      attrs: { src: node.attrs?.src ?? '', alt: node.attrs?.alt ?? '' },
+    }
+  }
+
+  if (node.content) {
+    return { ...node, content: node.content.map(normalizeImageNodes) }
+  }
+
+  return node
 }
 
 /**

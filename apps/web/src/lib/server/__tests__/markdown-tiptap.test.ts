@@ -164,6 +164,35 @@ describe('tiptapJsonToMarkdown', () => {
     expect(result).toContain('**bold**')
   })
 
+  test('serializes resizableImage nodes as standard markdown images', () => {
+    const json = {
+      type: 'doc' as const,
+      content: [
+        {
+          type: 'paragraph',
+          content: [{ type: 'text', text: 'Before image' }],
+        },
+        {
+          type: 'resizableImage',
+          attrs: {
+            src: 'https://example.com/photo.jpg',
+            alt: 'A photo',
+            width: 400,
+            'data-keep-ratio': true,
+          },
+        },
+        {
+          type: 'paragraph',
+          content: [{ type: 'text', text: 'After image' }],
+        },
+      ],
+    }
+    const result = tiptapJsonToMarkdown(json)
+    expect(result).toContain('![A photo](https://example.com/photo.jpg)')
+    expect(result).toContain('Before image')
+    expect(result).toContain('After image')
+  })
+
   test('round-trips markdown through JSON and back', () => {
     const original = '## Heading\n\nA paragraph with **bold** text.\n\n- Item 1\n- Item 2'
     const json = markdownToTiptapJson(original)
