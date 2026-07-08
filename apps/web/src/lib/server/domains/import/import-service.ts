@@ -280,9 +280,6 @@ export async function processBatch(
     statusId: row.statusId,
     principalId: row.principalId,
     voteCount: row.voteCount,
-    // CSV import brings an aggregate vote count without per-voter rows in `votes`.
-    // Record it as the immutable imported baseline so merges preserve it (see post.merge.ts).
-    importedVoteCount: row.voteCount,
     createdAt: row.createdAt,
     updatedAt: row.createdAt,
   }))
