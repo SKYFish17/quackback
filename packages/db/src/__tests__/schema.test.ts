@@ -78,14 +78,13 @@ describe('Schema definitions', () => {
       expect(columns).toContain('statusId')
       expect(columns).toContain('ownerPrincipalId')
       expect(columns).toContain('voteCount')
-      expect(columns).toContain('importedVoteCount')
       expect(columns).toContain('createdAt')
       expect(columns).toContain('updatedAt')
     })
 
     it('has correct column count', () => {
       const columns = Object.keys(getTableColumns(posts))
-      expect(columns.length).toBe(31)
+      expect(columns.length).toBe(30)
     })
   })
 
