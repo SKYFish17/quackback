@@ -17,6 +17,7 @@ export type ActivityType =
   | 'post.unmerged'
   | 'vote.proxy'
   | 'vote.removed'
+  | 'vote.count_set'
   | 'owner.assigned'
   | 'owner.unassigned'
   | 'tags.added'

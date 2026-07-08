@@ -19,7 +19,7 @@ import {
 } from '@/lib/server/db'
 import { createId, toUuid, type PostId, type PrincipalId } from '@quackback/ids'
 import { getExecuteRows } from '@/lib/server/utils'
-import { NotFoundError } from '@/lib/shared/errors'
+import { NotFoundError, ValidationError } from '@/lib/shared/errors'
 import type { VoteResult } from './post.types'
 import {
   levelFromFlags,
@@ -302,6 +302,38 @@ export async function removeVote(
   }
 
   return { removed: row.deleted, voteCount: row.vote_count ?? 0 }
+}
+
+/**
+ * Manually set a post's vote count (admin override).
+ *
+ * Directly overwrites vote_count. This composes with additive merge/unmerge (see
+ * post.merge.ts): those only apply +/- deltas and never recompute from scratch, so a
+ * manually set value is preserved. The vote_count_non_negative DB constraint is mirrored
+ * here for a clean validation error.
+ *
+ * @param postId - Post whose count to set
+ * @param voteCount - New non-negative vote count
+ */
+export async function setPostVoteCount(
+  postId: PostId,
+  voteCount: number
+): Promise<{ voteCount: number }> {
+  if (!Number.isInteger(voteCount) || voteCount < 0) {
+    throw new ValidationError('INVALID_VOTE_COUNT', 'Vote count must be a non-negative integer')
+  }
+
+  const [row] = await db
+    .update(posts)
+    .set({ voteCount })
+    .where(eq(posts.id, postId))
+    .returning({ voteCount: posts.voteCount })
+
+  if (!row) {
+    throw new NotFoundError('POST_NOT_FOUND', `Post with ID ${postId} not found`)
+  }
+
+  return { voteCount: row.voteCount }
 }
 
 /**

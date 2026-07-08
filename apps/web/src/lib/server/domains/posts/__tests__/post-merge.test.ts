@@ -14,10 +14,19 @@ const mockDbExecute = vi.fn()
 const createActivity = vi.fn()
 const scheduleDispatch = vi.fn().mockResolvedValue(undefined)
 
+// Vote count returned by the additive merge/unmerge UPDATE ... RETURNING. Set per test.
+let mockCanonicalVoteCount = 0
+
 function createUpdateChain() {
+  // `.where(...)` is awaited directly by plain updates (resolves undefined via `then`),
+  // and chained with `.returning(...)` by the vote-count update.
+  const whereResult: Record<string, unknown> = {
+    returning: vi.fn().mockResolvedValue([{ voteCount: mockCanonicalVoteCount }]),
+    then: (resolve: (v: unknown) => void) => resolve(undefined),
+  }
   const chain: Record<string, unknown> = {}
   chain.set = vi.fn(() => chain)
-  chain.where = vi.fn().mockResolvedValue(undefined)
+  chain.where = vi.fn(() => whereResult)
   return chain
 }
 
@@ -113,7 +122,7 @@ describe('mergePost', () => {
     mockPrincipalFindFirst.mockResolvedValue({ displayName: 'Author' })
     mockBoardsFindFirst.mockResolvedValue({ id: 'board_mock', slug: 'feedback' })
     // Default: vote count recalculation returns 5
-    mockDbExecute.mockResolvedValue([{ unique_voters: 5 }])
+    mockCanonicalVoteCount = 5
   })
 
   it('throws ValidationError on self-merge', async () => {
@@ -199,7 +208,7 @@ describe('mergePost', () => {
     mockPostsFindFirst
       .mockResolvedValueOnce(mockPost({ id: POST_A }))
       .mockResolvedValueOnce(mockPost({ id: POST_B }))
-    mockDbExecute.mockResolvedValue([{ unique_voters: 8 }])
+    mockCanonicalVoteCount = 8
 
     const result = await mergePost(POST_A, POST_B, ACTOR)
 
@@ -242,7 +251,7 @@ describe('unmergePost', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockBoardsFindFirst.mockResolvedValue({ id: 'board_mock', slug: 'feedback' })
-    mockDbExecute.mockResolvedValue([{ unique_voters: 3 }])
+    mockCanonicalVoteCount = 3
   })
 
   it('throws NotFoundError when post not found', async () => {
@@ -283,7 +292,7 @@ describe('unmergePost', () => {
     mockPostsFindFirst
       .mockResolvedValueOnce(mockPost({ id: POST_A, canonicalPostId: POST_B }))
       .mockResolvedValueOnce(mockPost({ id: POST_B, title: 'Canon' }))
-    mockDbExecute.mockResolvedValue([{ unique_voters: 3 }])
+    mockCanonicalVoteCount = 3
 
     const result = await unmergePost(POST_A, ACTOR)
 

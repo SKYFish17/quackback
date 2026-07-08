@@ -16,6 +16,7 @@ import {
   restorePostFn,
   proxyVoteFn,
   removeVoteFn,
+  setPostVoteCountFn,
 } from '@/lib/server/functions/posts'
 import { toggleVoteFn } from '@/lib/server/functions/public-posts'
 import { inboxKeys } from '@/lib/client/hooks/use-inbox-query'
@@ -399,6 +400,27 @@ export function useProxyVote(postId: PostId) {
       }))
       // Refresh avatar stack
       queryClient.invalidateQueries({ queryKey: ['inbox', 'voters', postId] })
+    },
+  })
+}
+
+// ============================================================================
+// Set Vote Count Mutation (admin manual override)
+// ============================================================================
+
+export function useSetPostVoteCount(postId: PostId) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (voteCount: number) => setPostVoteCountFn({ data: { postId, voteCount } }),
+    onSuccess: (data) => {
+      queryClient.setQueryData<PostDetails>(inboxKeys.detail(postId), (old) =>
+        old ? { ...old, voteCount: data.voteCount } : old
+      )
+      updatePostInLists(queryClient, postId, (post) => ({
+        ...post,
+        voteCount: data.voteCount,
+      }))
     },
   })
 }

@@ -32,7 +32,12 @@ import {
 } from '@/lib/server/domains/posts/post.cascade-delete'
 import { hasUserVoted } from '@/lib/server/domains/posts/post.public.utils'
 import { getMergedPosts, getPostMergeInfo } from '@/lib/server/domains/posts/post.merge'
-import { getPostVoters, addVoteOnBehalf, removeVote } from '@/lib/server/domains/posts/post.voting'
+import {
+  getPostVoters,
+  addVoteOnBehalf,
+  removeVote,
+  setPostVoteCount,
+} from '@/lib/server/domains/posts/post.voting'
 import { toIsoString, toIsoStringOrNull } from '@/lib/shared/utils'
 
 /**
@@ -630,6 +635,31 @@ export const removeVoteFn = createServerFn({ method: 'POST' })
     }
 
     return result
+  })
+
+/**
+ * Manually set a post's vote count (admin override).
+ */
+export const setPostVoteCountFn = createServerFn({ method: 'POST' })
+  .inputValidator(z.object({ postId: z.string(), voteCount: z.number().int().min(0) }))
+  .handler(async ({ data }) => {
+    try {
+      const auth = await requireAuth({ roles: ['admin', 'member'] })
+
+      const result = await setPostVoteCount(data.postId as PostId, data.voteCount)
+
+      createActivity({
+        postId: data.postId as PostId,
+        principalId: auth.principal.id,
+        type: 'vote.count_set',
+        metadata: { voteCount: data.voteCount },
+      })
+
+      return result
+    } catch (error) {
+      console.error(`[fn:posts] setPostVoteCountFn failed:`, error)
+      throw error
+    }
   })
 
 /**
