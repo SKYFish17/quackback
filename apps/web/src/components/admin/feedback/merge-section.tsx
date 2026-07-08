@@ -178,7 +178,7 @@ export function MergeIntoDialog({ postId, postTitle, open, onOpenChange }: Merge
           <AlertDialogHeader>
             <AlertDialogTitle>Merge this post?</AlertDialogTitle>
             <AlertDialogDescription asChild>
-              <div className="space-y-3">
+              <div className="min-w-0 space-y-3">
                 <p>This post will be merged into the selected post. Votes will be combined.</p>
                 <div className="flex items-center gap-2 rounded-lg bg-muted/50 p-3 text-sm overflow-hidden">
                   <span className="truncate flex-1 min-w-0 font-medium text-foreground">

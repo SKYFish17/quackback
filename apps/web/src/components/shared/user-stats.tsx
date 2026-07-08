@@ -1,6 +1,7 @@
 'use client'
 
 import { useQuery } from '@tanstack/react-query'
+import { useIntl } from 'react-intl'
 import { getUserStatsFn } from '@/lib/server/functions/user'
 import { cn } from '@/lib/shared/utils'
 
@@ -16,7 +17,7 @@ function StatItem({
   return (
     <div
       className={cn(
-        'flex flex-col items-center rounded-md bg-muted/40',
+        'flex min-w-0 flex-col items-center rounded-md bg-muted/40',
         compact ? 'py-1.5 px-1' : 'py-2 px-2'
       )}
     >
@@ -25,7 +26,12 @@ function StatItem({
       >
         {value ?? '-'}
       </span>
-      <span className={cn('text-muted-foreground mt-0.5', compact ? 'text-[10px]' : 'text-xs')}>
+      <span
+        className={cn(
+          'text-muted-foreground mt-0.5 whitespace-nowrap',
+          compact ? 'text-[9px]' : 'text-[10px]'
+        )}
+      >
         {label}
       </span>
     </div>
@@ -39,6 +45,7 @@ interface UserStatsBarProps {
 }
 
 export function UserStatsBar({ compact, className, headers }: UserStatsBarProps) {
+  const intl = useIntl()
   const { data } = useQuery({
     queryKey: headers ? ['widget', 'user', 'engagement-stats'] : ['user', 'engagement-stats'],
     queryFn: () => getUserStatsFn(headers ? { headers } : undefined),
@@ -47,9 +54,24 @@ export function UserStatsBar({ compact, className, headers }: UserStatsBarProps)
 
   return (
     <div className={cn('grid grid-cols-3 gap-1', className)}>
-      <StatItem value={data?.ideas} label="Ideas" compact={compact} />
-      <StatItem value={data?.votes} label="Votes" compact={compact} />
-      <StatItem value={data?.comments} label="Comments" compact={compact} />
+      <StatItem
+        value={data?.ideas}
+        label={intl.formatMessage({ id: 'portal.userStats.ideas', defaultMessage: 'Ideas' })}
+        compact={compact}
+      />
+      <StatItem
+        value={data?.votes}
+        label={intl.formatMessage({ id: 'portal.userStats.votes', defaultMessage: 'Votes' })}
+        compact={compact}
+      />
+      <StatItem
+        value={data?.comments}
+        label={intl.formatMessage({
+          id: 'portal.userStats.comments',
+          defaultMessage: 'Comments',
+        })}
+        compact={compact}
+      />
     </div>
   )
 }
