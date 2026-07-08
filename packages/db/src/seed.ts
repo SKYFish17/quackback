@@ -486,6 +486,10 @@ async function seed() {
         principalId: author.id,
         statusId,
         voteCount,
+        // Vote rows below are capped at principals.length, so any voteCount above that
+        // has no backing rows. Record the remainder as the imported baseline (mirrors a
+        // CSV import) so merged vote counts stay consistent and idempotent — see post.merge.ts.
+        importedVoteCount: Math.max(0, voteCount - principals.length),
         createdAt: randomDate(180),
         updatedAt: new Date(),
       })

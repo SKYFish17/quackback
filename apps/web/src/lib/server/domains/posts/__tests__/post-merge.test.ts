@@ -113,7 +113,7 @@ describe('mergePost', () => {
     mockPrincipalFindFirst.mockResolvedValue({ displayName: 'Author' })
     mockBoardsFindFirst.mockResolvedValue({ id: 'board_mock', slug: 'feedback' })
     // Default: vote count recalculation returns 5
-    mockDbExecute.mockResolvedValue([{ unique_voters: 5 }])
+    mockDbExecute.mockResolvedValue([{ vote_count: 5 }])
   })
 
   it('throws ValidationError on self-merge', async () => {
@@ -199,7 +199,7 @@ describe('mergePost', () => {
     mockPostsFindFirst
       .mockResolvedValueOnce(mockPost({ id: POST_A }))
       .mockResolvedValueOnce(mockPost({ id: POST_B }))
-    mockDbExecute.mockResolvedValue([{ unique_voters: 8 }])
+    mockDbExecute.mockResolvedValue([{ vote_count: 8 }])
 
     const result = await mergePost(POST_A, POST_B, ACTOR)
 
@@ -242,7 +242,7 @@ describe('unmergePost', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockBoardsFindFirst.mockResolvedValue({ id: 'board_mock', slug: 'feedback' })
-    mockDbExecute.mockResolvedValue([{ unique_voters: 3 }])
+    mockDbExecute.mockResolvedValue([{ vote_count: 3 }])
   })
 
   it('throws NotFoundError when post not found', async () => {
@@ -283,7 +283,7 @@ describe('unmergePost', () => {
     mockPostsFindFirst
       .mockResolvedValueOnce(mockPost({ id: POST_A, canonicalPostId: POST_B }))
       .mockResolvedValueOnce(mockPost({ id: POST_B, title: 'Canon' }))
-    mockDbExecute.mockResolvedValue([{ unique_voters: 3 }])
+    mockDbExecute.mockResolvedValue([{ vote_count: 3 }])
 
     const result = await unmergePost(POST_A, ACTOR)
 

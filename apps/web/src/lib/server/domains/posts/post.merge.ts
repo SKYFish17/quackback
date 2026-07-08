@@ -413,16 +413,22 @@ export async function previewMergedPost(
       hasUserVoted(canonicalPostId, viewerPrincipalId),
     ])
 
-  // Compute deduplicated vote count across both posts (same SQL as real merge)
+  // Compute merged vote count across both posts (same logic as real merge):
+  // unique real voters (deduplicated) + imported votes not backed by vote rows.
   const canonicalUuid = toUuid(canonicalPostId)
   const duplicateUuid = toUuid(duplicatePostId)
-  const result = await db.execute<{ unique_voters: number }>(sql`
-    SELECT COUNT(DISTINCT v.principal_id)::int AS unique_voters
-    FROM ${votes} v
-    WHERE v.post_id IN (${canonicalUuid}::uuid, ${duplicateUuid}::uuid)
+  const result = await db.execute<{ vote_count: number }>(sql`
+    WITH related AS (
+      SELECT ${canonicalUuid}::uuid AS post_id, p.imported_vote_count
+      FROM ${posts} p WHERE p.id = ${canonicalUuid}::uuid
+      UNION ALL
+      SELECT ${duplicateUuid}::uuid AS post_id, p.imported_vote_count
+      FROM ${posts} p WHERE p.id = ${duplicateUuid}::uuid
+    )
+    ${mergedVoteCountSelect}
   `)
-  const rows = getExecuteRows<{ unique_voters: number }>(result)
-  const mergedVoteCount = rows[0]?.unique_voters ?? 0
+  const rows = getExecuteRows<{ vote_count: number }>(result)
+  const mergedVoteCount = rows[0]?.vote_count ?? 0
 
   // Combine comment counts from both posts
   const combinedCommentCount = canonicalDetails.commentCount + duplicateDetails.commentCount
@@ -441,6 +447,37 @@ export async function previewMergedPost(
 }
 
 /**
+ * Shared SQL that turns a `related(post_id, imported_vote_count)` CTE into a merged
+ * vote count.
+ *
+ * The count has two non-overlapping parts:
+ * 1. Unique real voters — rows in `votes`, deduplicated by principal across all
+ *    related posts (so someone who voted on two merged duplicates counts once).
+ * 2. Imported votes — CSV import records an aggregate count in
+ *    `posts.imported_vote_count` with no rows in `votes` (voter identities aren't
+ *    imported). Summing that immutable column preserves those votes across merges.
+ *
+ * Reading the baseline from `imported_vote_count` (never overwritten) rather than from
+ * the mutable `vote_count` keeps recalculation idempotent: a canonical post's
+ * `vote_count` holds the merged aggregate, so deriving the imported gap from it would
+ * re-count the aggregate as "imported" and inflate on every merge/unmerge.
+ *
+ * The caller must provide a `related` CTE with `post_id` (uuid) and
+ * `imported_vote_count` columns.
+ */
+const mergedVoteCountSelect = sql`
+  , real_votes AS (
+    SELECT COUNT(DISTINCT v.principal_id)::int AS n
+    FROM ${votes} v
+    WHERE v.post_id IN (SELECT post_id FROM related)
+  ),
+  imported_votes AS (
+    SELECT COALESCE(SUM(imported_vote_count), 0)::int AS n FROM related
+  )
+  SELECT ((SELECT n FROM real_votes) + (SELECT n FROM imported_votes))::int AS vote_count
+`
+
+/**
  * Recalculate the vote count for a canonical post.
  * Counts unique voters across the canonical post and all its merged duplicates.
  *
@@ -451,24 +488,25 @@ async function recalculateCanonicalVoteCount(
   canonicalPostId: PostId,
   options?: { resetMergeCheck?: boolean }
 ): Promise<number> {
-  // Count unique member votes across canonical + all merged duplicates
+  // Count votes across canonical + all merged duplicates. See mergedVoteCountSelect
+  // for why this is real unique voters + unbacked imported votes.
   // Note: must convert TypeID to raw UUID for use in raw SQL
   const canonicalUuid = toUuid(canonicalPostId)
-  const result = await db.execute<{ unique_voters: number }>(sql`
-    WITH related_post_ids AS (
-      SELECT ${canonicalUuid}::uuid AS post_id
+  const result = await db.execute<{ vote_count: number }>(sql`
+    WITH related AS (
+      SELECT ${canonicalUuid}::uuid AS post_id, p.imported_vote_count
+      FROM ${posts} p WHERE p.id = ${canonicalUuid}::uuid
       UNION ALL
-      SELECT id FROM ${posts}
-      WHERE canonical_post_id = ${canonicalUuid}::uuid
-        AND deleted_at IS NULL
+      SELECT p.id AS post_id, p.imported_vote_count
+      FROM ${posts} p
+      WHERE p.canonical_post_id = ${canonicalUuid}::uuid
+        AND p.deleted_at IS NULL
     )
-    SELECT COUNT(DISTINCT v.principal_id)::int AS unique_voters
-    FROM ${votes} v
-    WHERE v.post_id IN (SELECT post_id FROM related_post_ids)
+    ${mergedVoteCountSelect}
   `)
 
-  const rows = getExecuteRows<{ unique_voters: number }>(result)
-  const newCount = rows[0]?.unique_voters ?? 0
+  const rows = getExecuteRows<{ vote_count: number }>(result)
+  const newCount = rows[0]?.vote_count ?? 0
 
   // Update the canonical post's vote count (and optionally reset mergeCheckedAt)
   await db

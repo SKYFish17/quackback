@@ -62,6 +62,12 @@ export const posts = pgTable(
       }
     ),
     voteCount: integer('vote_count').default(0).notNull(),
+    // Immutable count of votes brought in via CSV import that have no backing
+    // rows in the `votes` table (imported aggregate counts without voter identities).
+    // Set once at import time and never overwritten by merge recalculation, so the
+    // merged vote count = distinct real voters + SUM(imported_vote_count) stays
+    // idempotent across repeated merge/unmerge. See post.merge.ts.
+    importedVoteCount: integer('imported_vote_count').default(0).notNull(),
     // Denormalized comment count for performance
     // Maintained by application code in comment.service.ts (create/delete operations)
     commentCount: integer('comment_count').default(0).notNull(),
