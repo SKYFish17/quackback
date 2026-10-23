@@ -4,11 +4,12 @@ import type { CloudConfig } from './cloud.types'
  * Whether the "Powered by Quackback" badge should render on the portal,
  * widget, and branded emails.
  *
- * Self-hosted (cloud disabled) always shows it. `isEntitled('hideBranding')` is
- * the wrong check: that function is true when cloud is off, which would hide
- * the badge on every OSS install.
+ * SmmBox fork: self-hosted (cloud disabled) never shows it — feedback.smmbox.com
+ * runs under the SmmBox brand. Upstream always shows it on self-hosted installs.
+ * `isEntitled('hideBranding')` is still the wrong check for cloud: that function
+ * is true when cloud is off.
  */
 export function shouldShowPoweredBy(config: CloudConfig): boolean {
-  if (!config.enabled) return true
+  if (!config.enabled) return false
   return config.entitlements.hideBranding !== true
 }

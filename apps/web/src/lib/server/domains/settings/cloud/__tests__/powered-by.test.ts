@@ -13,13 +13,13 @@ function cloudOn(overrides: Partial<CloudConfig> = {}): CloudConfig {
 }
 
 describe('shouldShowPoweredBy', () => {
-  it('always shows on a self-hosted install, even though isEntitled(hideBranding) is true', () => {
+  it('never shows on a self-hosted install (SmmBox fork)', () => {
     expect(isEntitled(DISABLED_CLOUD_CONFIG, 'hideBranding')).toBe(true)
-    expect(shouldShowPoweredBy(DISABLED_CLOUD_CONFIG)).toBe(true)
+    expect(shouldShowPoweredBy(DISABLED_CLOUD_CONFIG)).toBe(false)
   })
 
   it('is the same rule for portal, widget, and branded emails', () => {
-    expect(shouldShowPoweredBy(DISABLED_CLOUD_CONFIG)).toBe(true)
+    expect(shouldShowPoweredBy(DISABLED_CLOUD_CONFIG)).toBe(false)
     expect(shouldShowPoweredBy(cloudOn({ entitlements: { hideBranding: true } }))).toBe(false)
   })
 
