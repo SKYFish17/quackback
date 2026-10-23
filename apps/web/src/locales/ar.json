@@ -1232,5 +1232,9 @@
   "unsubscribe.error.failed.title": "حدث خطأ ما",
   "unsubscribe.error.failed.message": "تعذّرت معالجة طلبك. يرجى المحاولة لاحقًا.",
   "unsubscribe.error.expired.title": "انتهت صلاحية الرابط",
-  "unsubscribe.error.expired.message": "تم استخدام رابط إلغاء الاشتراك هذا بالفعل أو انتهت صلاحيته."
+  "unsubscribe.error.expired.message": "تم استخدام رابط إلغاء الاشتراك هذا بالفعل أو انتهت صلاحيته.",
+  "portal.commentForm.currentStatus": "الحالي",
+  "portal.userStats.ideas": "الأفكار",
+  "portal.userStats.votes": "الأصوات",
+  "portal.userStats.comments": "التعليقات"
 }

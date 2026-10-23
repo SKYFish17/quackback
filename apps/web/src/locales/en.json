@@ -1232,5 +1232,9 @@
   "unsubscribe.error.failed.title": "Something Went Wrong",
   "unsubscribe.error.failed.message": "We couldn't process your request. Please try again later.",
   "unsubscribe.error.expired.title": "Link Expired",
-  "unsubscribe.error.expired.message": "This unsubscribe link has already been used or has expired."
+  "unsubscribe.error.expired.message": "This unsubscribe link has already been used or has expired.",
+  "portal.commentForm.currentStatus": "current",
+  "portal.userStats.ideas": "Ideas",
+  "portal.userStats.votes": "Votes",
+  "portal.userStats.comments": "Comments"
 }

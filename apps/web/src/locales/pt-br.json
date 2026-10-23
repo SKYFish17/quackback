@@ -1232,5 +1232,9 @@
   "unsubscribe.error.failed.title": "Algo deu errado",
   "unsubscribe.error.failed.message": "Não foi possível processar sua solicitação. Tente novamente mais tarde.",
   "unsubscribe.error.expired.title": "Link expirado",
-  "unsubscribe.error.expired.message": "Este link de cancelamento já foi usado ou expirou."
+  "unsubscribe.error.expired.message": "Este link de cancelamento já foi usado ou expirou.",
+  "portal.commentForm.currentStatus": "atual",
+  "portal.userStats.ideas": "Ideias",
+  "portal.userStats.votes": "Votos",
+  "portal.userStats.comments": "Comentários"
 }

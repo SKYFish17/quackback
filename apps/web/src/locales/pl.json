@@ -1232,5 +1232,9 @@
   "unsubscribe.error.failed.title": "Coś poszło nie tak",
   "unsubscribe.error.failed.message": "Nie udało się przetworzyć żądania. Spróbuj ponownie później.",
   "unsubscribe.error.expired.title": "Link wygasł",
-  "unsubscribe.error.expired.message": "Ten link do wypisania został już użyty lub wygasł."
+  "unsubscribe.error.expired.message": "Ten link do wypisania został już użyty lub wygasł.",
+  "portal.commentForm.currentStatus": "obecny",
+  "portal.userStats.ideas": "Pomysły",
+  "portal.userStats.votes": "Głosy",
+  "portal.userStats.comments": "Komentarze"
 }

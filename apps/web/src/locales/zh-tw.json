@@ -1232,5 +1232,9 @@
   "unsubscribe.error.failed.title": "發生錯誤",
   "unsubscribe.error.failed.message": "無法處理你的要求，請稍後再試。",
   "unsubscribe.error.expired.title": "連結已失效",
-  "unsubscribe.error.expired.message": "此取消訂閱連結已被使用或已過期。"
+  "unsubscribe.error.expired.message": "此取消訂閱連結已被使用或已過期。",
+  "portal.commentForm.currentStatus": "目前",
+  "portal.userStats.ideas": "想法",
+  "portal.userStats.votes": "投票",
+  "portal.userStats.comments": "留言"
 }

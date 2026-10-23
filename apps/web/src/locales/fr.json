@@ -1232,5 +1232,9 @@
   "unsubscribe.error.failed.title": "Une erreur s'est produite",
   "unsubscribe.error.failed.message": "Nous n'avons pas pu traiter votre demande. Réessayez plus tard.",
   "unsubscribe.error.expired.title": "Lien expiré",
-  "unsubscribe.error.expired.message": "Ce lien de désabonnement a déjà été utilisé ou a expiré."
+  "unsubscribe.error.expired.message": "Ce lien de désabonnement a déjà été utilisé ou a expiré.",
+  "portal.commentForm.currentStatus": "actuel",
+  "portal.userStats.ideas": "Idées",
+  "portal.userStats.votes": "Votes",
+  "portal.userStats.comments": "Commentaires"
 }

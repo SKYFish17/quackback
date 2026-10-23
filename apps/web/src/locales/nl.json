@@ -1232,5 +1232,9 @@
   "unsubscribe.error.failed.title": "Er ging iets mis",
   "unsubscribe.error.failed.message": "We konden je verzoek niet verwerken. Probeer het later opnieuw.",
   "unsubscribe.error.expired.title": "Link verlopen",
-  "unsubscribe.error.expired.message": "Deze afmeldlink is al gebruikt of verlopen."
+  "unsubscribe.error.expired.message": "Deze afmeldlink is al gebruikt of verlopen.",
+  "portal.commentForm.currentStatus": "huidig",
+  "portal.userStats.ideas": "Ideeën",
+  "portal.userStats.votes": "Stemmen",
+  "portal.userStats.comments": "Reacties"
 }

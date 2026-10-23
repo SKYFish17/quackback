@@ -1232,5 +1232,9 @@
   "unsubscribe.error.failed.title": "Etwas ist schiefgelaufen",
   "unsubscribe.error.failed.message": "Wir konnten deine Anfrage nicht verarbeiten. Bitte versuche es später erneut.",
   "unsubscribe.error.expired.title": "Link abgelaufen",
-  "unsubscribe.error.expired.message": "Dieser Abmeldelink wurde bereits verwendet oder ist abgelaufen."
+  "unsubscribe.error.expired.message": "Dieser Abmeldelink wurde bereits verwendet oder ist abgelaufen.",
+  "portal.commentForm.currentStatus": "aktuell",
+  "portal.userStats.ideas": "Ideen",
+  "portal.userStats.votes": "Stimmen",
+  "portal.userStats.comments": "Kommentare"
 }

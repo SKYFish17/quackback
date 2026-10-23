@@ -360,7 +360,12 @@ export function CommentForm({
                         />
                         <span className="flex-1 text-start">{status.name}</span>
                         {isCurrent && !isSelected && (
-                          <span className="text-muted-foreground text-xs">current</span>
+                          <span className="text-muted-foreground text-xs">
+                            {intl.formatMessage({
+                              id: 'portal.commentForm.currentStatus',
+                              defaultMessage: 'current',
+                            })}
+                          </span>
                         )}
                         {isSelected && <CheckIcon className="size-3.5 text-primary shrink-0" />}
                       </button>
