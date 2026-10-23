@@ -39,7 +39,11 @@ import {
 } from '@/lib/server/domains/posts/post.cascade-delete'
 import { hasUserVoted } from '@/lib/server/domains/posts/post.public.utils'
 import { getMergedPosts, getPostMergeInfo } from '@/lib/server/domains/posts/post.merge'
-import { addVoteOnBehalf, removeVote } from '@/lib/server/domains/posts/post.voting'
+import {
+  addVoteOnBehalf,
+  removeVote,
+  setPostVoteCount,
+} from '@/lib/server/domains/posts/post.voting'
 import {
   ADMIN_POST_PANELS,
   loadAdminPostPanels,
@@ -713,6 +717,27 @@ export const removeVoteFn = createServerFn({ method: 'POST' })
         },
       })
     }
+
+    return result
+  })
+
+/**
+ * Manually set a post's vote count (admin override, #17654)
+ */
+export const setPostVoteCountFn = createServerFn({ method: 'POST' })
+  .validator(z.object({ postId: z.string(), voteCount: z.number().int().min(0) }))
+  .handler(async ({ data }) => {
+    const auth = await requireAuth({ permission: PERMISSIONS.POST_VOTE_ON_BEHALF })
+    const postId = data.postId as PostId
+
+    const result = await setPostVoteCount(postId, data.voteCount)
+
+    createActivity({
+      postId,
+      principalId: auth.principal.id,
+      type: 'vote.count_set',
+      metadata: { voteCount: data.voteCount },
+    })
 
     return result
   })

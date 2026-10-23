@@ -32,6 +32,8 @@ import { AuthVoteButton } from '@/components/public/auth-vote-button'
 import { AuthorHoverCard } from '@/components/public/author-hover-card'
 import { AdminAuthorHoverCard } from '@/components/admin/admin-author-hover-card'
 import { AuthSubscriptionBell } from '@/components/public/auth-subscription-bell'
+import { toast } from 'sonner'
+import { useSetPostVoteCount } from '@/lib/client/mutations/posts'
 import {
   VotersAvatarStack,
   type VotersQuerySource,
@@ -273,6 +275,71 @@ export function ManagePostActions({
   )
 }
 
+/**
+ * Admin-only inline editor for a post's vote count (#17654). Click the number to edit;
+ * Enter or blur saves, Escape cancels. Persisted via useSetPostVoteCount (see post.voting.ts).
+ */
+function EditableUpvoteCount({ postId, voteCount }: { postId: PostId; voteCount: number }) {
+  const intl = useIntl()
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState('')
+  const setVoteCount = useSetPostVoteCount(postId)
+
+  const startEdit = () => {
+    setValue(String(voteCount))
+    setEditing(true)
+  }
+
+  const save = () => {
+    setEditing(false)
+    const next = parseInt(value, 10)
+    if (Number.isNaN(next) || next < 0 || next === voteCount) return
+    setVoteCount.mutate(next, {
+      onError: (err) =>
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : intl.formatMessage({
+                id: 'admin.postDetail.voteCount.saveFailed',
+                defaultMessage: 'Failed to update vote count',
+              })
+        ),
+    })
+  }
+
+  if (editing) {
+    return (
+      <input
+        type="number"
+        min={0}
+        autoFocus
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={save}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') save()
+          else if (e.key === 'Escape') setEditing(false)
+        }}
+        className="w-16 text-right text-sm font-semibold tabular-nums bg-transparent border-b border-border outline-none focus:border-primary"
+      />
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={startEdit}
+      title={intl.formatMessage({
+        id: 'admin.postDetail.voteCount.edit',
+        defaultMessage: 'Edit vote count',
+      })}
+      className="text-sm font-semibold tabular-nums text-foreground hover:text-primary transition-colors"
+    >
+      {voteCount}
+    </button>
+  )
+}
+
 interface MetadataSidebarProps {
   postId: PostId
   voteCount: number
@@ -495,9 +562,7 @@ export function MetadataSidebar({
                     />
                   </span>
                 </div>
-                <span className="text-sm font-semibold tabular-nums text-foreground">
-                  {voteCount}
-                </span>
+                <EditableUpvoteCount postId={postId} voteCount={voteCount} />
               </div>
               {showVoters && (
                 <VotersAvatarStack

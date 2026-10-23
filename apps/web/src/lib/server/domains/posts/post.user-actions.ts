@@ -32,7 +32,7 @@ import { markdownToTiptapJson } from '@/lib/server/markdown-tiptap'
 import { contentHoldReason } from '@/lib/server/content/content-holds'
 import { recordAuditEvent } from '@/lib/server/audit/log'
 import { logger } from '@/lib/server/logger'
-import { recalculateCanonicalVoteCount } from './post.merge-ids'
+import { adjustCanonicalVoteCount, recalculateCanonicalCommentCount } from './post.merge-ids'
 
 const log = logger.child({ component: 'post-user-actions' })
 
@@ -314,7 +314,9 @@ export async function softDeletePost(
   }
 
   if (existingPost.canonicalPostId) {
-    await recalculateCanonicalVoteCount(existingPost.canonicalPostId as PostId)
+    // Additive merge (#17654): the deleted source's votes leave the canonical.
+    await recalculateCanonicalCommentCount(existingPost.canonicalPostId as PostId)
+    await adjustCanonicalVoteCount(existingPost.canonicalPostId as PostId, -updatedPost.voteCount)
   }
 
   createActivity({
@@ -386,7 +388,9 @@ export async function restorePost(
   }
 
   if (restoredPost.canonicalPostId) {
-    await recalculateCanonicalVoteCount(restoredPost.canonicalPostId as PostId)
+    // Additive merge (#17654): the restored source's votes return to the canonical.
+    await recalculateCanonicalCommentCount(restoredPost.canonicalPostId as PostId)
+    await adjustCanonicalVoteCount(restoredPost.canonicalPostId as PostId, restoredPost.voteCount)
   }
 
   createActivity({

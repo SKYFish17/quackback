@@ -273,6 +273,8 @@
   "portal.postDetail.mergeBanner.mergedInto": "Dieses Feedback wurde zusammengeführt mit",
   "portal.postDetail.mergeBanner.votesCount": "Stimmen und Aktivität zählen jetzt für den verknüpften Beitrag.",
   "portal.postDetail.metadata.upvotes": "Stimmen",
+  "admin.postDetail.voteCount.edit": "Stimmenzahl bearbeiten",
+  "admin.postDetail.voteCount.saveFailed": "Stimmenzahl konnte nicht geändert werden",
   "portal.postDetail.metadata.status": "Status",
   "portal.postDetail.metadata.board": "Board",
   "portal.postDetail.metadata.owner": "Zuständig",

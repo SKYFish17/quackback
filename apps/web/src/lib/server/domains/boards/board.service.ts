@@ -290,18 +290,25 @@ export async function deleteBoard(id: BoardId): Promise<void> {
     })
 
   // Merged sources on this board drop out of the canonical thread once the
-  // board is gone. Recount those canonicals so stored comment/vote totals
-  // match what listViewableMergedSourceIds will render.
+  // board is gone. Recount those canonicals' comments and subtract the
+  // sources' votes (additive merge, #17654) so stored totals match what
+  // listViewableMergedSourceIds will render. Already-deleted sources had
+  // their votes subtracted when they were deleted.
   const mergedSources = await db
-    .selectDistinct({ canonicalPostId: posts.canonicalPostId })
+    .select({ canonicalPostId: posts.canonicalPostId, voteCount: posts.voteCount })
     .from(posts)
-    .where(and(eq(posts.boardId, id), isNotNull(posts.canonicalPostId)))
-  const { recalculateCanonicalVoteCount } =
+    .where(and(eq(posts.boardId, id), isNotNull(posts.canonicalPostId), isNull(posts.deletedAt)))
+  const { adjustCanonicalVoteCount, recalculateCanonicalCommentCount } =
     await import('@/lib/server/domains/posts/post.merge-ids')
+  const recounted = new Set<string>()
   for (const row of mergedSources) {
-    if (row.canonicalPostId) {
-      await recalculateCanonicalVoteCount(row.canonicalPostId as PostId)
+    if (!row.canonicalPostId) continue
+    const canonicalPostId = row.canonicalPostId as PostId
+    if (!recounted.has(canonicalPostId)) {
+      recounted.add(canonicalPostId)
+      await recalculateCanonicalCommentCount(canonicalPostId)
     }
+    await adjustCanonicalVoteCount(canonicalPostId, -row.voteCount)
   }
 }
 

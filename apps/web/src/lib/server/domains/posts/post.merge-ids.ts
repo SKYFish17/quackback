@@ -8,7 +8,7 @@
  * Passing a merged source id resolves up to the canonical first, so a stale
  * client holding the source still mutates the surviving thread.
  */
-import { db, posts, postVotes, postComments, boards, eq, sql } from '@/lib/server/db'
+import { db, posts, postComments, boards, eq, sql } from '@/lib/server/db'
 import { isValidTypeId, toUuid, type PostId } from '@quackback/ids'
 import { getExecuteRows } from '@/lib/server/utils'
 
@@ -78,20 +78,48 @@ export async function adjustCanonicalCommentCount(
 }
 
 /**
- * Recount unique voters and public comments across a canonical + its sources.
+ * Add `delta` to a post's stored `vote_count` (never below zero).
+ *
+ * Votes are merged additively (#17654): Featurebase-imported posts carry an
+ * aggregate vote_count with no rows in `post_votes` (voter identities were not
+ * imported), so a distinct-voter recount would drop those votes. Merge adds the
+ * source's vote_count to the canonical, and unmerge, source deletion and board
+ * deletion subtract it again. A source's vote_count is frozen while merged
+ * (vote mutations update the canonical), so it is exactly what it contributed.
+ */
+export async function adjustCanonicalVoteCount(
+  canonicalPostId: PostId,
+  delta: number,
+  conn: TransactionalDb = db
+): Promise<number> {
+  const [row] = await conn
+    .update(posts)
+    .set({ voteCount: sql`GREATEST(0, ${posts.voteCount} + ${delta})` })
+    .where(eq(posts.id, canonicalPostId))
+    .returning({ voteCount: posts.voteCount })
+  return row?.voteCount ?? 0
+}
+
+/**
+ * Recount public comments across a canonical + its sources.
  * Runs via the transaction handle when called from merge/unmerge so the
  * recount commits atomically with the link change.
  *
+ * Vote counts are not recounted here: they are adjusted additively, see
+ * {@link adjustCanonicalVoteCount}.
+ *
  * Also correct for a standalone (unmerged) post: the related set is just
- * that post, so unmerge can restore the source's stored counts this way.
+ * that post, so unmerge can restore the source's stored comment count this way.
  */
-export async function recalculateCanonicalVoteCount(
+export async function recalculateCanonicalCommentCount(
   canonicalPostId: PostId,
   options?: { resetMergeCheck?: boolean },
   tx?: TransactionalDb
-): Promise<number> {
+): Promise<void> {
   if (!tx) {
-    return db.transaction((inner) => recalculateCanonicalVoteCount(canonicalPostId, options, inner))
+    return db.transaction((inner) =>
+      recalculateCanonicalCommentCount(canonicalPostId, options, inner)
+    )
   }
   const conn = tx
   const canonicalUuid = toUuid(canonicalPostId)
@@ -100,7 +128,7 @@ export async function recalculateCanonicalVoteCount(
   await conn.execute(sql`
     SELECT id FROM ${posts} WHERE id = ${canonicalUuid}::uuid FOR UPDATE
   `)
-  const result = await conn.execute<{ unique_voters: number; visible_comments: number }>(sql`
+  const result = await conn.execute<{ visible_comments: number }>(sql`
     WITH related_post_ids AS (
       SELECT ${canonicalUuid}::uuid AS post_id
       UNION ALL
@@ -111,34 +139,22 @@ export async function recalculateCanonicalVoteCount(
         AND s.deleted_at IS NULL
         AND b.deleted_at IS NULL
     )
-    SELECT
-      (
-        SELECT COUNT(DISTINCT v.principal_id)::int
-        FROM ${postVotes} v
-        WHERE v.post_id IN (SELECT post_id FROM related_post_ids)
-      ) AS unique_voters,
-      (
-        SELECT COUNT(*)::int
-        FROM ${postComments} c
-        WHERE c.post_id IN (SELECT post_id FROM related_post_ids)
-          AND c.deleted_at IS NULL
-          AND c.is_private = false
-          AND c.moderation_state <> 'pending'
-      ) AS visible_comments
+    SELECT COUNT(*)::int AS visible_comments
+    FROM ${postComments} c
+    WHERE c.post_id IN (SELECT post_id FROM related_post_ids)
+      AND c.deleted_at IS NULL
+      AND c.is_private = false
+      AND c.moderation_state <> 'pending'
   `)
 
-  const rows = getExecuteRows<{ unique_voters: number; visible_comments: number }>(result)
-  const newCount = rows[0]?.unique_voters ?? 0
+  const rows = getExecuteRows<{ visible_comments: number }>(result)
   const newCommentCount = rows[0]?.visible_comments ?? 0
 
   await conn
     .update(posts)
     .set({
-      voteCount: newCount,
       commentCount: newCommentCount,
       ...(options?.resetMergeCheck && { mergeCheckedAt: null }),
     })
     .where(eq(posts.id, canonicalPostId))
-
-  return newCount
 }

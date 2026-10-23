@@ -6,7 +6,9 @@
  *
  * Key behaviors:
  * - Merging links posts (no data is deleted)
- * - Vote counts are recalculated to reflect unique voters across merged posts
+ * - Vote counts are additive (#17654): merge adds the duplicate's stored votes to the
+ *   canonical, unmerge subtracts them. Featurebase-imported posts carry votes with no
+ *   rows in post_votes, so a unique-voter recount would drop them
  * - All merge operations are reversible via unmerge
  * - Only admins can merge/unmerge (enforced at the server function layer)
  */
@@ -14,7 +16,6 @@
 import {
   db,
   posts,
-  postVotes,
   boards,
   eq,
   and,
@@ -22,13 +23,12 @@ import {
   sql,
   principal as principalTable,
 } from '@/lib/server/db'
-import { type BoardId, type PostId, type PrincipalId, type UserId, toUuid } from '@quackback/ids'
+import { type BoardId, type PostId, type PrincipalId, type UserId } from '@quackback/ids'
 import { scheduleDispatch } from '@/lib/server/events/scheduler'
-import { getExecuteRows } from '@/lib/server/utils'
 import { NotFoundError, ValidationError, ConflictError } from '@/lib/shared/errors'
 import { createActivity } from '@/lib/server/domains/activity/activity.service'
 import { ANONYMOUS_ACTOR, canViewPost, type Actor } from '@/lib/server/policy'
-import { recalculateCanonicalVoteCount } from './post.merge-ids'
+import { adjustCanonicalVoteCount, recalculateCanonicalCommentCount } from './post.merge-ids'
 import {
   dispatchPostMerged,
   dispatchPostUnmerged,
@@ -151,7 +151,7 @@ export async function mergePost(
         mergedByPrincipalId: actorPrincipalId,
       })
       .where(and(eq(posts.id, duplicatePostId), isNull(posts.canonicalPostId)))
-      .returning({ id: posts.id })
+      .returning({ id: posts.id, voteCount: posts.voteCount })
 
     if (claimed.length === 0) {
       throw new ConflictError(
@@ -160,7 +160,10 @@ export async function mergePost(
       )
     }
 
-    return recalculateCanonicalVoteCount(canonicalPostId, { resetMergeCheck: true }, tx)
+    // Additive merge (#17654): the canonical gains the duplicate's stored votes,
+    // including Featurebase-imported ones that have no rows in post_votes.
+    await recalculateCanonicalCommentCount(canonicalPostId, { resetMergeCheck: true }, tx)
+    return adjustCanonicalVoteCount(canonicalPostId, claimed[0].voteCount, tx)
   })
 
   // Queue a delayed re-check for additional duplicates (e.g. 3 similar posts where only 1 was caught)
@@ -249,7 +252,7 @@ function schedulePostMergeRecheck(canonicalPostId: PostId): void {
  *
  * - Validates the post exists and is currently merged
  * - Clears canonicalPostId, mergedAt, mergedByPrincipalId
- * - Recalculates the canonical post's voteCount
+ * - Subtracts the restored post's votes from the canonical (additive merge, #17654)
  *
  * @param postId - The merged post to restore
  * @param actorPrincipalId - The admin performing the unmerge
@@ -277,7 +280,7 @@ export async function unmergePost(
   // together so we never leave a canonical with an inflated vote count
   // for a duplicate that's been unlinked.
   const newVoteCount = await db.transaction(async (tx) => {
-    await tx
+    const [restored] = await tx
       .update(posts)
       .set({
         canonicalPostId: null,
@@ -286,13 +289,22 @@ export async function unmergePost(
         mergeCheckedAt: null,
       })
       .where(eq(posts.id, postId))
+      .returning({ voteCount: posts.voteCount, deletedAt: posts.deletedAt, boardId: posts.boardId })
 
-    const canonicalCount = await recalculateCanonicalVoteCount(canonicalPostId, undefined, tx)
-    // Source counters were not maintained while merged (vote/unvote on the
-    // thread updates the canonical). Recalc the restored post so it
-    // reappears with the votes and comments that still belong to it.
-    await recalculateCanonicalVoteCount(postId, undefined, tx)
-    return canonicalCount
+    await recalculateCanonicalCommentCount(canonicalPostId, undefined, tx)
+    // The restored post keeps its own stored vote_count: it was frozen while
+    // merged, so it is exactly what the merge added to the canonical. Recount
+    // only its comments.
+    await recalculateCanonicalCommentCount(postId, undefined, tx)
+
+    // A deleted source, or one on a deleted board, already had its votes
+    // subtracted when it dropped out of the thread.
+    const board = await tx.query.boards.findFirst({
+      where: eq(boards.id, restored.boardId),
+      columns: { deletedAt: true },
+    })
+    const stillContributes = !restored.deletedAt && !board?.deletedAt
+    return adjustCanonicalVoteCount(canonicalPostId, stillContributes ? -restored.voteCount : 0, tx)
   })
 
   // Look up the canonical post title and board for the activity metadata and event
@@ -363,12 +375,10 @@ export async function getMergedPosts(canonicalPostId: PostId): Promise<MergedPos
     .select({
       id: posts.id,
       title: posts.title,
-      // Stored source.voteCount is not maintained while merged (vote
-      // mutations update the canonical). Count the source's live vote
-      // rows so Merged Feedback does not show a pre-merge snapshot.
-      voteCount: sql<number>`(
-        SELECT COUNT(*)::int FROM ${postVotes} v WHERE v.post_id = posts.id
-      )`.as('vote_count'),
+      // Stored source.voteCount is frozen while merged (vote mutations update
+      // the canonical), so it is exactly what the merge added to the canonical,
+      // including Featurebase-imported votes that have no post_votes rows (#17654).
+      voteCount: posts.voteCount,
       createdAt: posts.createdAt,
       mergedAt: posts.mergedAt,
       authorName: sql<string | null>`(
@@ -478,8 +488,8 @@ export interface MergePreviewResult {
 /**
  * Preview what the merged post would look like without actually performing the merge.
  *
- * Loads full details for both posts, computes the deduplicated vote count
- * (same logic as recalculateCanonicalVoteCount), and returns separate comment
+ * Loads full details for both posts, sums their vote counts (same additive
+ * logic as mergePost, #17654), and returns separate comment
  * arrays so the UI can show them with a divider.
  *
  * @param canonicalPostId - The post that would remain after merge
@@ -509,16 +519,9 @@ export async function previewMergedPost(
   ])
   const hasVoted = votedCanonical || votedDuplicate
 
-  // Compute deduplicated vote count across both posts (same SQL as real merge)
-  const canonicalUuid = toUuid(canonicalPostId)
-  const duplicateUuid = toUuid(duplicatePostId)
-  const result = await db.execute<{ unique_voters: number }>(sql`
-    SELECT COUNT(DISTINCT v.principal_id)::int AS unique_voters
-    FROM ${postVotes} v
-    WHERE v.post_id IN (${canonicalUuid}::uuid, ${duplicateUuid}::uuid)
-  `)
-  const rows = getExecuteRows<{ unique_voters: number }>(result)
-  const mergedVoteCount = rows[0]?.unique_voters ?? 0
+  // Additive merge preview: the canonical's votes plus the duplicate's votes
+  // (mirrors the real merge in mergePost).
+  const mergedVoteCount = canonicalDetails.voteCount + duplicateDetails.voteCount
 
   // Combine comment counts from both posts
   const combinedCommentCount = canonicalDetails.commentCount + duplicateDetails.commentCount

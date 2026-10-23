@@ -48,7 +48,7 @@ import {
 import { getCommentsWithReplies } from '../post.query'
 import { hasUserVoted, getVoteAndSubscriptionStatus } from '../post.public.utils'
 import { getPostVoters, listPostVoters } from '../post.voters'
-import { voteOnPost } from '../post.voting'
+import { voteOnPost, setPostVoteCount } from '../post.voting'
 import { getVotedPostIdsByUserId } from '../post.public'
 import { DEFAULT_BOARD_ACCESS } from '@/lib/shared/db-types'
 
@@ -185,7 +185,10 @@ describe.skipIf(!fixture.available)('post merge aggregation (real DB)', () => {
     expect(voters.map((v) => v.principalId).sort()).toEqual([voterA, voterB].sort())
   })
 
-  it('counts overlapping voters once and skips pending comments, then unmerge restores the survivor', async () => {
+  // #17654: votes merge additively (stored counts are summed, not recounted as unique
+  // voters), because Featurebase-imported posts carry votes with no post_votes rows.
+  // An overlapping voter is therefore counted on both posts; the voter list stays unique.
+  it('adds overlapping votes, skips pending comments, then unmerge subtracts the source', async () => {
     const actor = await seedPrincipal('Admin')
     const voterA = await seedPrincipal('Voter A')
     const boardId = await seedBoard()
@@ -210,10 +213,10 @@ describe.skipIf(!fixture.available)('post merge aggregation (real DB)', () => {
     await seedComment(source, voterA, 'pending on source', { moderationState: 'pending' })
 
     const merged = await mergePost(source, canonical, actor)
-    expect(merged.canonicalPost.voteCount).toBe(1)
+    expect(merged.canonicalPost.voteCount).toBe(2)
 
     const [afterMerge] = await testDb.select().from(posts).where(eq(posts.id, canonical))
-    expect(afterMerge.voteCount).toBe(1)
+    expect(afterMerge.voteCount).toBe(2)
     expect(afterMerge.commentCount).toBe(1)
 
     const voters = await getPostVoters(canonical)
@@ -232,7 +235,11 @@ describe.skipIf(!fixture.available)('post merge aggregation (real DB)', () => {
     expect(sourceAfter.commentCount).toBe(0)
   })
 
-  it('restores the source voteCount on unmerge after the vote was removed via the canonical', async () => {
+  // #17654 known limitation: a source's vote_count is frozen while merged, so a vote on
+  // the source that its voter removes via the canonical thread is subtracted from the
+  // canonical but still counted on the source after unmerge. Admins can fix the number
+  // with the manual vote-count override.
+  it('keeps the frozen source voteCount on unmerge after the vote was removed via the canonical', async () => {
     const actor = await seedPrincipal('Admin')
     const voter = await seedPrincipal('Voter')
     const boardId = await seedBoard()
@@ -259,8 +266,10 @@ describe.skipIf(!fixture.available)('post merge aggregation (real DB)', () => {
 
     await unmergePost(source, actor)
 
+    const [canonicalAfter] = await testDb.select().from(posts).where(eq(posts.id, canonical))
+    expect(canonicalAfter.voteCount).toBe(0)
     const [sourceAfter] = await testDb.select().from(posts).where(eq(posts.id, source))
-    expect(sourceAfter.voteCount).toBe(0)
+    expect(sourceAfter.voteCount).toBe(1)
   })
 
   it('applies a vote on a merged source id to the canonical', async () => {
@@ -400,7 +409,9 @@ describe.skipIf(!fixture.available)('post merge aggregation (real DB)', () => {
     expect(ids.has(source)).toBe(true)
   })
 
-  it('lists live source vote rows on merged posts, not the stale stored count', async () => {
+  // #17654: Merged Feedback shows the source's stored (frozen) count — what the merge
+  // added to the canonical, including imported votes without post_votes rows.
+  it('lists the stored source vote count on merged posts', async () => {
     const actor = await seedPrincipal('Admin')
     const voter = await seedPrincipal('Voter')
     const boardId = await seedBoard()
@@ -425,7 +436,7 @@ describe.skipIf(!fixture.available)('post merge aggregation (real DB)', () => {
 
     await voteOnPost(canonical, voter)
 
-    expect((await getMergedPosts(canonical))[0]?.voteCount).toBe(0)
+    expect((await getMergedPosts(canonical))[0]?.voteCount).toBe(1)
     const [sourceRow] = await testDb.select().from(posts).where(eq(posts.id, source))
     expect(sourceRow.voteCount).toBe(1)
   })
@@ -547,5 +558,48 @@ describe.skipIf(!fixture.available)('post merge aggregation (real DB)', () => {
     const voters = await getPostVoters(canonical)
     expect(voters).toHaveLength(1)
     expect(voters[0]?.subscriptionLevel).toBe('all')
+  })
+
+  // #17654: Featurebase-imported posts carry an aggregate vote_count with no rows in
+  // post_votes. Merge must add those votes to the canonical and unmerge must take them back.
+  it('keeps imported votes without post_votes rows through merge and unmerge', async () => {
+    const actor = await seedPrincipal('Admin')
+    const boardId = await seedBoard()
+    const canonical = await seedPost({
+      boardId,
+      principalId: actor,
+      title: 'Canonical',
+      voteCount: 7,
+    })
+    const source = await seedPost({ boardId, principalId: actor, title: 'Source', voteCount: 5 })
+
+    const merged = await mergePost(source, canonical, actor)
+    expect(merged.canonicalPost.voteCount).toBe(12)
+    expect((await getMergedPosts(canonical))[0]?.voteCount).toBe(5)
+
+    const unmerged = await unmergePost(source, actor)
+    expect(unmerged.canonicalPost.voteCount).toBe(7)
+    const [sourceAfter] = await testDb.select().from(posts).where(eq(posts.id, source))
+    expect(sourceAfter.voteCount).toBe(5)
+  })
+
+  it('sets the vote count manually and refuses a merged source', async () => {
+    const actor = await seedPrincipal('Admin')
+    const boardId = await seedBoard()
+    const canonical = await seedPost({
+      boardId,
+      principalId: actor,
+      title: 'Canonical',
+      voteCount: 2,
+    })
+    const source = await seedPost({ boardId, principalId: actor, title: 'Source', voteCount: 3 })
+
+    expect(await setPostVoteCount(canonical, 40)).toEqual({ voteCount: 40 })
+    await mergePost(source, canonical, actor)
+    const [afterMerge] = await testDb.select().from(posts).where(eq(posts.id, canonical))
+    expect(afterMerge.voteCount).toBe(43)
+
+    await expect(setPostVoteCount(source, 1)).rejects.toThrow(/merged into another post/)
+    await expect(setPostVoteCount(canonical, -1)).rejects.toThrow(/non-negative/)
   })
 })

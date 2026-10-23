@@ -18,7 +18,7 @@ import {
 import { createId, fromUuid, toUuid, type PostId, type PrincipalId } from '@quackback/ids'
 import { relatedPostIdsSql } from './post.merge-ids'
 import { getExecuteRows } from '@/lib/server/utils'
-import { NotFoundError } from '@/lib/shared/errors'
+import { NotFoundError, ValidationError } from '@/lib/shared/errors'
 import { realEmail } from '@/lib/shared/anonymous-email'
 import { logger } from '@/lib/server/logger'
 import { dispatchPostVoted } from '@/lib/server/events/dispatch'
@@ -395,6 +395,48 @@ export async function removeVote(
   }
 
   return { removed: row.deleted, voteCount: row.vote_count ?? 0 }
+}
+
+/**
+ * Manually set a post's vote count (admin override, #17654).
+ *
+ * Directly overwrites vote_count. This composes with additive merge/unmerge (see
+ * post.merge-ids.ts): those only apply +/- deltas and never recount from scratch, so a
+ * manually set value is preserved. A merged source is refused: its stored count is
+ * what unmerge subtracts from the canonical, so editing it would corrupt the canonical.
+ *
+ * @param postId - Post whose count to set
+ * @param voteCount - New non-negative vote count
+ */
+export async function setPostVoteCount(
+  postId: PostId,
+  voteCount: number
+): Promise<{ voteCount: number }> {
+  if (!Number.isInteger(voteCount) || voteCount < 0) {
+    throw new ValidationError('INVALID_VOTE_COUNT', 'Vote count must be a non-negative integer')
+  }
+
+  const existing = await db.query.posts.findFirst({
+    where: eq(posts.id, postId),
+    columns: { canonicalPostId: true },
+  })
+  if (!existing) {
+    throw new NotFoundError('POST_NOT_FOUND', `Post with ID ${postId} not found`)
+  }
+  if (existing.canonicalPostId) {
+    throw new ValidationError(
+      'POST_IS_MERGED',
+      'This post is merged into another post. Edit the vote count of the canonical post.'
+    )
+  }
+
+  const [row] = await db
+    .update(posts)
+    .set({ voteCount })
+    .where(eq(posts.id, postId))
+    .returning({ voteCount: posts.voteCount })
+
+  return { voteCount: row?.voteCount ?? voteCount }
 }
 
 export {

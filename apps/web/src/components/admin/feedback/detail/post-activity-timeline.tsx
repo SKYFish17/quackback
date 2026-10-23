@@ -108,6 +108,10 @@ const ACTIVITY_CONFIG: Partial<Record<ActivityType, ActivityDisplayConfig>> = {
       return voter ? `${actorLabel(a)} removed ${voter}'s vote` : `${actorLabel(a)} removed a vote`
     },
   },
+  'vote.count_set': {
+    icon: HandThumbUpIcon,
+    label: (m, a) => `${actorLabel(a)} set the vote count to ${(m.voteCount as number) ?? 0}`,
+  },
   'post.deleted': {
     icon: TrashIcon,
     label: (_, a) => `${actorLabel(a)} deleted this post`,

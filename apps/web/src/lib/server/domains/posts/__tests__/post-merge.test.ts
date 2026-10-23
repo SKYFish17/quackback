@@ -20,9 +20,15 @@ const scheduleDispatch = vi.fn().mockResolvedValue(undefined)
 // child, canonical not merged elsewhere, claim succeeds); the
 // concurrent-merge tests below override one or more of these to reproduce
 // the guard rejecting a would-be two-level chain or a lost claim race.
+//
+// `.returning()` is called more than once per operation (the claim / unlink
+// UPDATE, then the additive vote-count UPDATE), so tests can queue per-call
+// results in `returningQueue`; once it is empty, `claimedReturning` is used.
 const hoisted = vi.hoisted(() => ({
   mockTxPostsFindFirst: vi.fn(),
-  claimedReturning: [{ id: 'post_test_id' }] as Array<{ id: string }>,
+  mockTxBoardsFindFirst: vi.fn(),
+  claimedReturning: [{ id: 'post_test_id', voteCount: 3 }] as Array<Record<string, unknown>>,
+  returningQueue: [] as Array<Array<Record<string, unknown>>>,
 }))
 
 function createUpdateChain() {
@@ -34,7 +40,7 @@ function createUpdateChain() {
   // round-3 add.
   chain.where = vi.fn(() => ({
     then: (onFulfilled: (v: void) => void) => Promise.resolve().then(onFulfilled),
-    returning: () => Promise.resolve(hoisted.claimedReturning),
+    returning: () => Promise.resolve(hoisted.returningQueue.shift() ?? hoisted.claimedReturning),
   }))
   return chain
 }
@@ -65,6 +71,9 @@ vi.mock('@/lib/server/db', async (importOriginal) => {
           query: {
             posts: {
               findFirst: (...args: unknown[]) => hoisted.mockTxPostsFindFirst(...args),
+            },
+            boards: {
+              findFirst: (...args: unknown[]) => hoisted.mockTxBoardsFindFirst(...args),
             },
           },
           update: (..._args: unknown[]) => {
@@ -155,7 +164,8 @@ describe('mergePost', () => {
     hoisted.mockTxPostsFindFirst
       .mockResolvedValueOnce(undefined)
       .mockResolvedValueOnce({ canonicalPostId: null })
-    hoisted.claimedReturning = [{ id: 'post_test_id' }]
+    hoisted.claimedReturning = [{ id: 'post_test_id', voteCount: 3 }]
+    hoisted.returningQueue = []
   })
 
   it('throws ValidationError on self-merge', async () => {
@@ -237,11 +247,13 @@ describe('mergePost', () => {
     )
   })
 
-  it('returns merge result with vote count', async () => {
+  it('returns merge result with the additively adjusted vote count', async () => {
     mockPostsFindFirst
       .mockResolvedValueOnce(mockPost({ id: POST_A }))
       .mockResolvedValueOnce(mockPost({ id: POST_B }))
-    mockDbExecute.mockResolvedValue([{ unique_voters: 8, visible_comments: 3 }])
+    // claim UPDATE returns the duplicate's stored votes, then the canonical's
+    // vote_count UPDATE returns the new total (#17654: no unique-voter recount)
+    hoisted.returningQueue = [[{ id: POST_A, voteCount: 3 }], [{ voteCount: 8 }]]
 
     const result = await mergePost(POST_A, POST_B, ACTOR)
 
@@ -328,9 +340,9 @@ describe('mergePost', () => {
 
       await expect(mergePost(POST_A, POST_B, ACTOR)).rejects.toThrow(/merged elsewhere/)
 
-      // The vote-count recalculation (and everything after it) never runs —
+      // The count recalculation (and everything after it) never runs —
       // only the two advisory-lock acquisitions happened, no third execute
-      // for recalculateCanonicalVoteCount, no activity, no second canonical.
+      // for recalculateCanonicalCommentCount, no activity, no second canonical.
       expect(mockDbExecute).toHaveBeenCalledTimes(2)
       expect(createActivity).not.toHaveBeenCalled()
     })
@@ -341,7 +353,11 @@ describe('unmergePost', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockBoardsFindFirst.mockResolvedValue({ id: 'board_mock', slug: 'feedback' })
-    mockDbExecute.mockResolvedValue([{ unique_voters: 3, visible_comments: 1 }])
+    mockDbExecute.mockResolvedValue([{ visible_comments: 1 }])
+    hoisted.mockTxBoardsFindFirst.mockReset()
+    hoisted.mockTxBoardsFindFirst.mockResolvedValue({ deletedAt: null })
+    hoisted.claimedReturning = [{ voteCount: 2, deletedAt: null, boardId: 'board_mock' }]
+    hoisted.returningQueue = []
   })
 
   it('throws NotFoundError when post not found', async () => {
@@ -378,11 +394,16 @@ describe('unmergePost', () => {
     )
   })
 
-  it('returns unmerge result with recalculated vote count', async () => {
+  it('returns unmerge result with the additively adjusted vote count', async () => {
     mockPostsFindFirst
       .mockResolvedValueOnce(mockPost({ id: POST_A, canonicalPostId: POST_B }))
       .mockResolvedValueOnce(mockPost({ id: POST_B, title: 'Canon' }))
-    mockDbExecute.mockResolvedValue([{ unique_voters: 3 }])
+    // unlink UPDATE returns the restored post's frozen votes, then the
+    // canonical's vote_count UPDATE returns what is left after subtracting them
+    hoisted.returningQueue = [
+      [{ voteCount: 2, deletedAt: null, boardId: 'board_mock' }],
+      [{ voteCount: 3 }],
+    ]
 
     const result = await unmergePost(POST_A, ACTOR)
 

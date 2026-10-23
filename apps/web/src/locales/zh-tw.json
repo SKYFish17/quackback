@@ -273,6 +273,8 @@
   "portal.postDetail.mergeBanner.mergedInto": "這則意見回饋已合併至",
   "portal.postDetail.mergeBanner.votesCount": "票數與動態現在會計入連結的項目。",
   "portal.postDetail.metadata.upvotes": "票數",
+  "admin.postDetail.voteCount.edit": "編輯票數",
+  "admin.postDetail.voteCount.saveFailed": "無法更新票數",
   "portal.postDetail.metadata.status": "狀態",
   "portal.postDetail.metadata.board": "看板",
   "portal.postDetail.metadata.owner": "負責人",
