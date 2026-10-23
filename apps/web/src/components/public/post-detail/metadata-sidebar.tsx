@@ -300,7 +300,7 @@ function EditableUpvoteCount({ postId, voteCount }: { postId: PostId; voteCount:
           err instanceof Error
             ? err.message
             : intl.formatMessage({
-                id: 'admin.postDetail.voteCount.saveFailed',
+                id: 'portal.postDetail.voteCount.saveFailed',
                 defaultMessage: 'Failed to update vote count',
               })
         ),
@@ -330,7 +330,7 @@ function EditableUpvoteCount({ postId, voteCount }: { postId: PostId; voteCount:
       type="button"
       onClick={startEdit}
       title={intl.formatMessage({
-        id: 'admin.postDetail.voteCount.edit',
+        id: 'portal.postDetail.voteCount.edit',
         defaultMessage: 'Edit vote count',
       })}
       className="text-sm font-semibold tabular-nums text-foreground hover:text-primary transition-colors"
