@@ -210,6 +210,7 @@
   "portal.header.nav.roadmap": "Roadmap",
   "portal.header.nav.changelog": "Changelog",
   "portal.header.auth.logIn": "Inloggen",
+  "portal.header.auth.logInWith": "Inloggen met {provider}",
   "portal.header.auth.signUp": "Registreren",
   "portal.header.auth.signOut": "Uitloggen",
   "portal.header.auth.settings": "Instellingen",

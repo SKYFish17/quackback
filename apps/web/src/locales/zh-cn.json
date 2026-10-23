@@ -210,6 +210,7 @@
   "portal.header.nav.roadmap": "路线图",
   "portal.header.nav.changelog": "更新日志",
   "portal.header.auth.logIn": "登录",
+  "portal.header.auth.logInWith": "通过 {provider} 登录",
   "portal.header.auth.signUp": "注册",
   "portal.header.auth.signOut": "退出登录",
   "portal.header.auth.settings": "设置",

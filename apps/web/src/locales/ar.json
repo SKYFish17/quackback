@@ -210,6 +210,7 @@
   "portal.header.nav.roadmap": "خارطة الطريق",
   "portal.header.nav.changelog": "آخر المستجدات",
   "portal.header.auth.logIn": "تسجيل الدخول",
+  "portal.header.auth.logInWith": "تسجيل الدخول عبر {provider}",
   "portal.header.auth.signUp": "إنشاء حساب",
   "portal.header.auth.signOut": "تسجيل الخروج",
   "portal.header.auth.settings": "الإعدادات",

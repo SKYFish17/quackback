@@ -210,6 +210,7 @@
   "portal.header.nav.roadmap": "Roadmap",
   "portal.header.nav.changelog": "Nouveautés",
   "portal.header.auth.logIn": "Se connecter",
+  "portal.header.auth.logInWith": "Se connecter avec {provider}",
   "portal.header.auth.signUp": "S'inscrire",
   "portal.header.auth.signOut": "Se déconnecter",
   "portal.header.auth.settings": "Paramètres",

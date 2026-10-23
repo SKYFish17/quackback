@@ -210,6 +210,7 @@
   "portal.header.nav.roadmap": "產品藍圖",
   "portal.header.nav.changelog": "更新日誌",
   "portal.header.auth.logIn": "登入",
+  "portal.header.auth.logInWith": "透過 {provider} 登入",
   "portal.header.auth.signUp": "註冊",
   "portal.header.auth.signOut": "登出",
   "portal.header.auth.settings": "設定",

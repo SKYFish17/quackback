@@ -136,6 +136,11 @@ export function PortalHeader({
     registeredAuthProviders,
     settings?.publicAuthConfig?.oauth ?? {}
   )
+  // SmmBox fork: name the sole provider on the button ("Войти через SmmBox").
+  // Falls back to plain "Log in" when the provider has no public button entry.
+  const soleOidcProviderName = soleOidcProviderId
+    ? settings?.publicPortalConfig?.oidcProviders?.find((p) => p.id === soleOidcProviderId)?.name
+    : undefined
 
   const authPopover = useAuthPopoverSafe()
   const openAuthPopover = authPopover?.openAuthPopover
@@ -289,7 +294,15 @@ export function PortalHeader({
               soleOidcProviderId ? redirectToSoleProvider() : openAuthPopover({ mode: 'login' })
             }
           >
-            <FormattedMessage id="portal.header.auth.logIn" defaultMessage="Log in" />
+            {soleOidcProviderName ? (
+              <FormattedMessage
+                id="portal.header.auth.logInWith"
+                defaultMessage="Log in with {provider}"
+                values={{ provider: soleOidcProviderName }}
+              />
+            ) : (
+              <FormattedMessage id="portal.header.auth.logIn" defaultMessage="Log in" />
+            )}
           </Button>
           {showSignup && (
             <Button
